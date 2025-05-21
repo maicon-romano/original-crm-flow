@@ -61,6 +61,7 @@ const UsersPage = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const isMounted = useRef(true);
+  const dataFetchedRef = useRef(false);
 
   // Check if current user is admin
   useEffect(() => {
@@ -80,14 +81,17 @@ const UsersPage = () => {
     }
   }, [user, navigate, toast]);
 
-  // Fetch users from Supabase
+  // Fetch users from Supabase - only run once when component mounts
   useEffect(() => {
     isMounted.current = true;
-    const isAdmin = user?.role === "admin";
     
+    // Only fetch if we haven't already and user is admin
     const fetchUsers = async () => {
-      if (!isAdmin || !isMounted.current) {
-        console.log("User is not admin or component unmounted, skipping user fetch");
+      if (dataFetchedRef.current || !isMounted.current) return;
+      
+      const isAdmin = user?.role === "admin";
+      if (!isAdmin) {
+        console.log("User is not admin, skipping user fetch");
         return;
       }
       
@@ -112,12 +116,14 @@ const UsersPage = () => {
           
           if (isMounted.current) {
             setUsers(directData || []);
+            dataFetchedRef.current = true;
           }
         } else {
           console.log("Users data from RPC:", data);
           
           if (isMounted.current) {
             setUsers(data as User[]);
+            dataFetchedRef.current = true;
           }
         }
         
@@ -142,9 +148,8 @@ const UsersPage = () => {
       }
     };
     
-    // Fetch users with a small delay to ensure auth is fully resolved
-    if (user) {
-      // Only fetch once when the component mounts
+    // Only fetch if user exists and is admin
+    if (user?.role === "admin") {
       fetchUsers();
     }
     
@@ -152,7 +157,7 @@ const UsersPage = () => {
     return () => {
       isMounted.current = false;
     };
-  }, [user, toast]); // Keep proper dependencies
+  }, [user?.role, toast]); // Only depend on user.role
 
   // Filter users based on search query
   const filteredUsers = users.filter(user => 
@@ -172,8 +177,12 @@ const UsersPage = () => {
   const handleUserFormComplete = () => {
     setIsAddUserOpen(false);
     setIsInviteOpen(false);
+    dataFetchedRef.current = false; // Reset to trigger a refetch
+    
     // Refetch users
     const fetchUsers = async () => {
+      if (!isMounted.current) return;
+      
       try {
         sonnerToast.info("Atualizando lista de usuários...");
         
@@ -190,9 +199,14 @@ const UsersPage = () => {
             .order("created_at", { ascending: false });
           
           if (directError) throw directError;
-          setUsers(directData || []);
+          
+          if (isMounted.current) {
+            setUsers(directData || []);
+          }
         } else {
-          setUsers(data as User[]);
+          if (isMounted.current) {
+            setUsers(data as User[]);
+          }
         }
         
         sonnerToast.success("Lista de usuários atualizada!");

@@ -4,3 +4,6 @@ project_id = "ixoqqggstwmezrmkyvuu"
 
 [functions.send-invitation]
 verify_jwt = true
+
+[functions.send-email]
+verify_jwt = true
