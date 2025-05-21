@@ -92,16 +92,25 @@ const UsersPage = () => {
         console.log("Fetching users from Supabase...");
         sonnerToast.info("Carregando usuários...");
         
-        // Use the new approach that doesn't trigger recursion
-        const { data, error } = await supabase
-          .from("users")
-          .select("*")
-          .order("created_at", { ascending: false });
+        // Use rpc call to avoid RLS recursion
+        const { data, error } = await supabase.rpc('get_all_users');
         
-        if (error) throw error;
+        if (error) {
+          console.error("RPC error:", error);
+          
+          // Fallback to direct query if RPC fails
+          const { data: directData, error: directError } = await supabase
+            .from("users")
+            .select("*")
+            .order("created_at", { ascending: false });
+          
+          if (directError) throw directError;
+          setUsers(directData || []);
+        } else {
+          console.log("Users data from RPC:", data);
+          setUsers(data || []);
+        }
         
-        console.log("Users data:", data);
-        setUsers(data || []);
         sonnerToast.success(`${data?.length || 0} usuários carregados!`);
       } catch (error: any) {
         console.error("Error fetching users:", error);
@@ -146,15 +155,24 @@ const UsersPage = () => {
       try {
         sonnerToast.info("Atualizando lista de usuários...");
         
-        const { data, error } = await supabase
-          .from("users")
-          .select("*")
-          .order("created_at", { ascending: false });
+        // Use rpc call to avoid RLS recursion
+        const { data, error } = await supabase.rpc('get_all_users');
         
-        if (error) throw error;
+        if (error) {
+          console.error("RPC error on refresh:", error);
+          
+          // Fallback to direct query
+          const { data: directData, error: directError } = await supabase
+            .from("users")
+            .select("*")
+            .order("created_at", { ascending: false });
+          
+          if (directError) throw directError;
+          setUsers(directData || []);
+        } else {
+          setUsers(data || []);
+        }
         
-        console.log("Users refetched:", data?.length);
-        setUsers(data || []);
         sonnerToast.success("Lista de usuários atualizada!");
       } catch (error) {
         console.error("Error refetching users:", error);
