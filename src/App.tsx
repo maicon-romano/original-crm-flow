@@ -3,7 +3,6 @@ import { SupabaseAuthProvider } from "@/contexts/SupabaseAuthContext";
 import { Routes, Route } from "react-router-dom";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 
@@ -45,53 +44,51 @@ const queryClient = new QueryClient({
 
 const App = () => {
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <ThemeProvider defaultTheme="light" storageKey="crm-theme">
-          <SupabaseAuthProvider>
-            <Toaster />
-            <Sonner />
-            <Routes>
-              {/* Public Routes */}
-              <Route path="/login" element={<Login />} />
-              <Route path="/reset-password" element={<ResetPassword />} />
-              <Route path="/update-password" element={<UpdatePassword />} />
+    <ThemeProvider defaultTheme="light" storageKey="crm-theme">
+      <QueryClientProvider client={queryClient}>
+        <SupabaseAuthProvider>
+          <Toaster />
+          <Sonner />
+          <Routes>
+            {/* Public Routes */}
+            <Route path="/login" element={<Login />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/update-password" element={<UpdatePassword />} />
+            
+            {/* Protected Routes - MainLayout handles auth check and redirects */}
+            <Route element={<MainLayout />}>
+              {/* Admin and Staff Routes */}
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/clients" element={<Clients />} />
+              <Route path="/leads" element={<Leads />} />
+              <Route path="/usuarios" element={<UsersPage />} />
+              <Route path="/users" element={<UsersPage />} /> {/* English alias */}
+              <Route path="/projects" element={<ProjectsPage />} />
+              <Route path="/tasks" element={<TasksPage />} />
+              <Route path="/proposals" element={<ProposalsPage />} />
+              <Route path="/contracts" element={<ContractsPage />} />
+              <Route path="/finance" element={<FinancePage />} />
+              <Route path="/tickets" element={<TicketsPage />} />
+              <Route path="/files" element={<FilesPage />} />
+              <Route path="/calendar" element={<CalendarPage />} />
+              <Route path="/reports" element={<ReportsPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
               
-              {/* Protected Routes - MainLayout handles auth check and redirects */}
-              <Route element={<MainLayout />}>
-                {/* Admin and Staff Routes */}
-                <Route path="/" element={<Dashboard />} />
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/clients" element={<Clients />} />
-                <Route path="/leads" element={<Leads />} />
-                <Route path="/usuarios" element={<UsersPage />} />
-                <Route path="/users" element={<UsersPage />} /> {/* English alias */}
-                <Route path="/projects" element={<ProjectsPage />} />
-                <Route path="/tasks" element={<TasksPage />} />
-                <Route path="/proposals" element={<ProposalsPage />} />
-                <Route path="/contracts" element={<ContractsPage />} />
-                <Route path="/finance" element={<FinancePage />} />
-                <Route path="/tickets" element={<TicketsPage />} />
-                <Route path="/files" element={<FilesPage />} />
-                <Route path="/calendar" element={<CalendarPage />} />
-                <Route path="/reports" element={<ReportsPage />} />
-                <Route path="/settings" element={<SettingsPage />} />
-                
-                {/* Client Routes */}
-                <Route path="/meus-projetos" element={<ClientProjects />} />
-                <Route path="/minhas-tarefas" element={<ClientTasks />} />
-                <Route path="/meus-arquivos" element={<ClientFiles />} />
-                <Route path="/minhas-faturas" element={<ClientInvoices />} />
-                <Route path="/meu-perfil" element={<ClientProfile />} />
-              </Route>
-              
-              {/* Catch-all route for 404 */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </SupabaseAuthProvider>
-        </ThemeProvider>
-      </TooltipProvider>
-    </QueryClientProvider>
+              {/* Client Routes */}
+              <Route path="/meus-projetos" element={<ClientProjects />} />
+              <Route path="/minhas-tarefas" element={<ClientTasks />} />
+              <Route path="/meus-arquivos" element={<ClientFiles />} />
+              <Route path="/minhas-faturas" element={<ClientInvoices />} />
+              <Route path="/meu-perfil" element={<ClientProfile />} />
+            </Route>
+            
+            {/* Catch-all route for 404 */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </SupabaseAuthProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   );
 };
 
