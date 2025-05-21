@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { 
   Table, 
@@ -27,7 +26,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
   Dialog,
@@ -70,7 +68,11 @@ export const UsersList = ({ users, isLoading, onRefresh }: UsersListProps) => {
   // Format date from timestamp
   const formatDate = (timestamp?: string) => {
     if (!timestamp) return "";
-    return new Date(timestamp).toLocaleDateString('pt-BR');
+    try {
+      return new Date(timestamp).toLocaleDateString('pt-BR');
+    } catch (e) {
+      return "";
+    }
   };
   
   // Reset user password
@@ -104,15 +106,7 @@ export const UsersList = ({ users, isLoading, onRefresh }: UsersListProps) => {
         throw new Error("Você não pode excluir sua própria conta");
       }
       
-      // Delete from users table first
-      const { error: deleteError } = await supabase
-        .from("users")
-        .delete()
-        .eq("id", userToDelete.id);
-      
-      if (deleteError) throw deleteError;
-      
-      // Delete from auth.users using an edge function
+      // Call the Edge Function to delete the user
       const { error: authDeleteError } = await supabase.functions.invoke("delete-user", {
         body: {
           userId: userToDelete.id,
@@ -120,8 +114,8 @@ export const UsersList = ({ users, isLoading, onRefresh }: UsersListProps) => {
       });
       
       if (authDeleteError) {
-        console.error("Error deleting auth user:", authDeleteError);
-        // Continue anyway since we've already deleted from our users table
+        console.error("Error deleting user:", authDeleteError);
+        throw authDeleteError;
       }
       
       toast.success(`Usuário ${userToDelete.name} excluído com sucesso`);

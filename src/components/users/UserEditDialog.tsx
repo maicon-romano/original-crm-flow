@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -60,23 +60,34 @@ export const UserEditDialog = ({ user, onComplete }: UserEditDialogProps) => {
     try {
       setIsSubmitting(true);
       
-      // Update user in the database
-      const { error } = await supabase
-        .from("users")
-        .update({
-          name: data.name,
-          email: data.email,
-          phone: data.phone,
-          position: data.position,
-          role: data.role,
-          active: data.active,
-          updated_at: new Date().toISOString()
-        })
-        .eq("id", user.id);
+      // Try using RPC call to update user to avoid RLS issues
+      const { error: rpcError } = await supabase.rpc('update_user', {
+        user_id: user.id,
+        user_name: data.name,
+        user_email: data.email,
+        user_phone: data.phone || null,
+        user_position: data.position || null,
+        user_role: data.role,
+        user_active: data.active,
+      });
       
-      if (error) {
-        console.error("Error updating user:", error);
-        throw new Error(error.message || "Erro ao atualizar usuário");
+      if (rpcError) {
+        console.error("RPC error updating user:", rpcError);
+        // Fall back to direct update
+        
+        const { error } = await supabase.functions.invoke("update-user", {
+          body: {
+            id: user.id,
+            name: data.name,
+            email: data.email,
+            phone: data.phone || null,
+            position: data.position || null,
+            role: data.role,
+            active: data.active
+          }
+        });
+        
+        if (error) throw error;
       }
       
       toast.success("Usuário atualizado com sucesso");

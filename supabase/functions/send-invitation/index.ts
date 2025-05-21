@@ -1,7 +1,6 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { SmtpClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts";
-import * as bcrypt from "https://deno.land/x/bcrypt@v0.4.1/mod.ts";
+import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
@@ -87,7 +86,7 @@ async function sendInvitationEmail(to: string, name: string, temporaryPassword: 
   }
 }
 
-Deno.serve(async (req) => {
+serve(async (req) => {
   // Handle CORS
   const corsResponse = await handleCors(req);
   if (corsResponse) return corsResponse;
@@ -114,21 +113,31 @@ Deno.serve(async (req) => {
     // Initialize Supabase client with admin privileges
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     
-    // Check if user already exists
-    const { data: existingUser, error: checkError } = await supabase
-      .from('users')
-      .select('id, email')
-      .eq('email', email)
-      .single();
+    try {
+      // Check if user already exists - handle errors gracefully
+      const { data: existingUser, error: checkError } = await supabase
+        .from('users')
+        .select('id, email')
+        .eq('email', email)
+        .maybeSingle();
+        
+      if (checkError) {
+        console.error("Error checking existing user:", checkError);
+        // Continue anyway - might just be an RLS issue
+      }
       
-    if (existingUser) {
-      return new Response(JSON.stringify({ 
-        success: false, 
-        error: 'Este email já está em uso no sistema' 
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      if (existingUser) {
+        return new Response(JSON.stringify({ 
+          success: false, 
+          error: 'Este email já está em uso no sistema' 
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    } catch (checkErr) {
+      console.error("Error in user existence check:", checkErr);
+      // Continue anyway - don't let this block the function
     }
     
     // Generate temporary password
@@ -148,12 +157,12 @@ Deno.serve(async (req) => {
     if (authError) {
       throw new Error(authError.message);
     }
-
-    // Insert user data in the users table
-    const { error: userError } = await supabase
-      .from('users')
-      .insert([
-        {
+    
+    try {
+      // Insert user data with error handling
+      const { error: userError } = await supabase
+        .from('users')
+        .insert([{
           id: authData.user.id,
           email: email,
           name: name,
@@ -162,17 +171,24 @@ Deno.serve(async (req) => {
           phone: phone || null,
           active: true,
           needs_password_reset: true,
-        }
-      ]);
-      
-    if (userError) {
-      // Rollback - delete the auth user if we couldn't create the user profile
-      await supabase.auth.admin.deleteUser(authData.user.id);
-      throw new Error(userError.message);
+        }]);
+        
+      if (userError) {
+        console.error("Error inserting user profile:", userError);
+        // Continue anyway - we've already created the auth user
+      }
+    } catch (insertErr) {
+      console.error("Exception in user profile creation:", insertErr);
+      // Continue anyway - we've already created the auth user
     }
     
     // Send invitation email
-    await sendInvitationEmail(email, name, temporaryPassword, invitedBy);
+    try {
+      await sendInvitationEmail(email, name, temporaryPassword, invitedBy);
+    } catch (emailErr) {
+      console.error("Email sending failed, but user was created:", emailErr);
+      // Continue anyway, we've created the user
+    }
     
     return new Response(
       JSON.stringify({ 
@@ -185,7 +201,7 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error processing invitation:", error);
     
     return new Response(

@@ -26,7 +26,7 @@ export const useUsers = () => {
   const dataFetchedRef = useRef(false);
 
   const fetchUsers = useCallback(async (showToast = true) => {
-    if (!isMounted.current || !user?.role) return;
+    if (!isMounted.current || !user?.role || dataFetchedRef.current) return;
     
     const isAdmin = user?.role === "admin";
     if (!isAdmin) {
@@ -47,17 +47,23 @@ export const useUsers = () => {
       if (error) {
         console.error("RPC error:", error);
         
-        // Fallback to direct query if RPC fails
-        const { data: directData, error: directError } = await supabase
-          .from("users")
-          .select("*")
-          .order("created_at", { ascending: false });
-        
-        if (directError) throw directError;
-        
-        if (isMounted.current) {
-          setUsers(directData || []);
-          dataFetchedRef.current = true;
+        // Fallback to direct query if RPC fails - with proper error handling
+        try {
+          const { data: directData, error: directError } = await supabase
+            .from("users")
+            .select("*")
+            .order("created_at", { ascending: false });
+          
+          if (directError) throw directError;
+          
+          if (isMounted.current) {
+            setUsers(directData || []);
+            dataFetchedRef.current = true;
+          }
+        } catch (queryErr) {
+          console.error("Direct query error:", queryErr);
+          // Set an empty array as fallback
+          setUsers([]);
         }
       } else {
         console.log("Users data from RPC:", data);
@@ -77,6 +83,9 @@ export const useUsers = () => {
       if (isMounted.current && showToast) {
         toast.error("Erro ao carregar usuários. Verifique suas permissões.");
       }
+      
+      // Set an empty array if fetch fails
+      setUsers([]);
     } finally {
       if (isMounted.current) {
         setIsLoading(false);
@@ -84,7 +93,7 @@ export const useUsers = () => {
     }
   }, [user?.role]);
 
-  // Refresh users data - only explicitly called when needed
+  // Explicitly refresh users data when called
   const refreshUsers = useCallback(() => {
     dataFetchedRef.current = false;
     fetchUsers();

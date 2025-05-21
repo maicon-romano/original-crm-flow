@@ -21,12 +21,12 @@ serve(async (req) => {
   
   try {
     // Get the request body
-    const { userId } = await req.json();
+    const { id, name, email, phone, position, role, active } = await req.json();
     
-    // Check if userId is provided
-    if (!userId) {
+    // Check if required fields are provided
+    if (!id || !name || !email || !role) {
       return new Response(
-        JSON.stringify({ error: 'User ID is required' }),
+        JSON.stringify({ error: 'Required fields missing' }),
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           status: 400,
@@ -37,43 +37,36 @@ serve(async (req) => {
     // Initialize Supabase client with service role (admin) privileges
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     
-    try {
-      // First try to delete the user from the public.users table
-      // This might fail due to RLS policies, but we'll continue anyway
-      const { error: dbError } = await supabase
-        .from('users')
-        .delete()
-        .eq('id', userId);
-      
-      if (dbError) {
-        console.error("Error deleting from users table:", dbError);
-        // Continue anyway, we'll try to delete from auth
-      }
-    } catch (dbErr) {
-      console.error("Exception deleting from users table:", dbErr);
-      // Continue anyway
-    }
-    
-    // Delete the user from auth.users
-    const { error } = await supabase.auth.admin.deleteUser(userId);
+    // Update user profile
+    const { error } = await supabase
+      .from('users')
+      .update({
+        name,
+        email,
+        phone,
+        position,
+        role,
+        active,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id);
     
     if (error) {
-      console.error("Error deleting user from auth:", error);
       throw error;
     }
     
     return new Response(
-      JSON.stringify({ success: true, message: 'User deleted successfully' }),
+      JSON.stringify({ success: true, message: 'User updated successfully' }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200,
       }
     );
   } catch (error) {
-    console.error('Error deleting user:', error);
+    console.error('Error updating user:', error);
     
     return new Response(
-      JSON.stringify({ error: error.message || 'Failed to delete user' }),
+      JSON.stringify({ error: error.message || 'Failed to update user' }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 500,
