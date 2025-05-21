@@ -265,6 +265,7 @@ Deno.serve(async (req) => {
       console.log("Email sent successfully:", info);
     } catch (emailError) {
       console.error("Error sending email:", emailError);
+      console.error("Email error details:", JSON.stringify(emailError, null, 2));
       throw new Error(`Erro ao enviar email: ${emailError.message}`);
     }
     
@@ -291,6 +292,7 @@ Deno.serve(async (req) => {
     )
   } catch (error) {
     console.error("Error sending invitation:", error);
+    console.error("Stack trace:", error.stack);
     
     return new Response(
       JSON.stringify({ 

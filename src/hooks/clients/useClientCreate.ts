@@ -52,7 +52,7 @@ export const useClientCreate = (
         setClients(prevClients => [typedClient, ...prevClients]);
       }
 
-      // After client is created in database, sequentially process the additional operations
+      // After client is created in database, process the additional operations in parallel
       await Promise.all([
         createGoogleDriveFolders(typedClient),
         sendInvitationIfRequested(typedClient)
@@ -106,7 +106,7 @@ export const useClientCreate = (
     let driveErrorMsg = "";
     
     try {
-      // Determinar o nome correto da pasta com base no tipo de pessoa
+      // Determine the correct folder name based on person type
       const folderName = client.person_type === "fisica" 
         ? client.contact_name 
         : client.company_name;
@@ -124,6 +124,7 @@ export const useClientCreate = (
         
         if (driveError) {
           console.error("Error creating Drive folders:", driveError);
+          console.error("Drive error details:", driveError);
           driveErrorMsg = driveError.message || "Erro desconhecido ao criar pastas";
         } else if (driveData?.folder_id) {
           console.log("Drive folders created successfully:", driveData);
@@ -134,6 +135,9 @@ export const useClientCreate = (
             .from('clients')
             .update({ drive_folder_id: driveData.folder_id })
             .eq('id', client.id);
+        } else {
+          console.error("No folder ID returned from create-drive-folders function", driveData);
+          driveErrorMsg = "API retornou dados incompletos";
         }
       } else {
         driveErrorMsg = "Nome para criação da pasta não fornecido";
@@ -158,7 +162,8 @@ export const useClientCreate = (
       try {
         const randomPassword = Math.random().toString(36).slice(-10);
         
-        const { error: inviteError } = await supabase.functions.invoke('send-invitation', {
+        console.log("Sending invitation to:", client.email);
+        const { data: inviteData, error: inviteError } = await supabase.functions.invoke('send-invitation', {
           body: {
             email: client.email,
             name: client.contact_name,
@@ -173,13 +178,18 @@ export const useClientCreate = (
         
         if (inviteError) {
           console.error("Error sending invitation:", inviteError);
+          console.error("Invite error details:", inviteError);
           toast.error("Erro ao enviar convite por e-mail");
-        } else {
+        } else if (inviteData?.success) {
+          console.log("Invitation sent successfully:", inviteData);
           toast.success("Convite enviado com sucesso!");
+        } else {
+          console.error("Unknown error in send-invitation function", inviteData);
+          toast.error("Erro desconhecido ao enviar convite");
         }
-      } catch (inviteErr) {
+      } catch (inviteErr: any) {
         console.error("Exception sending invitation:", inviteErr);
-        toast.error("Erro ao enviar convite por e-mail");
+        toast.error("Erro ao enviar convite por e-mail: " + (inviteErr.message || "Erro desconhecido"));
       }
     }
   };

@@ -18,8 +18,12 @@ export const useDriveFolders = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [folders, setFolders] = useState<DriveFolder[]>([]);
   const hasFetched = useRef<Record<string, boolean>>({});
+  const [error, setError] = useState<string | null>(null);
 
   const listFolders = async (folderId: string) => {
+    // Reset error state
+    setError(null);
+    
     // Prevent duplicate fetches for the same folder ID
     if (hasFetched.current[folderId]) {
       console.log(`Already fetched folders for ID: ${folderId}, using cached results`);
@@ -36,6 +40,7 @@ export const useDriveFolders = () => {
       
       if (error) {
         console.error("Error listing Drive folders:", error);
+        setError(error.message || "Erro ao listar pastas do Google Drive");
         throw new Error(error.message || "Erro ao listar pastas do Google Drive");
       }
       
@@ -51,6 +56,7 @@ export const useDriveFolders = () => {
       return [];
     } catch (error: any) {
       console.error("Exception listing Drive folders:", error);
+      setError(error.message || "Erro ao listar pastas do Google Drive");
       throw new Error(error.message || "Erro ao listar pastas do Google Drive");
     } finally {
       setIsLoading(false);
@@ -65,12 +71,14 @@ export const useDriveFolders = () => {
       // Clear entire cache
       hasFetched.current = {};
     }
+    setError(null);
   };
 
   return {
     listFolders,
     folders,
     isLoading,
-    clearCache
+    clearCache,
+    error
   };
 };
