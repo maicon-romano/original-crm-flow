@@ -12,6 +12,7 @@ import ResetPassword from "@/pages/ResetPassword";
 import Dashboard from "@/pages/Dashboard";
 import Clients from "@/pages/Clients";
 import Leads from "@/pages/Leads";
+import UsersPage from "@/pages/Users";
 import NotFound from "@/pages/NotFound";
 
 // Temporary placeholder for client-specific pages
@@ -20,7 +21,6 @@ const ClientTasks = () => <div className="p-4"><h1 className="text-2xl font-bold
 const ClientFiles = () => <div className="p-4"><h1 className="text-2xl font-bold">Meus Arquivos</h1></div>;
 const ClientInvoices = () => <div className="p-4"><h1 className="text-2xl font-bold">Minhas Faturas</h1></div>;
 const ClientProfile = () => <div className="p-4"><h1 className="text-2xl font-bold">Meu Perfil</h1></div>;
-const UsersPage = () => <div className="p-4"><h1 className="text-2xl font-bold">Gerenciar Usuários</h1></div>;
 
 const queryClient = new QueryClient();
 

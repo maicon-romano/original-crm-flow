@@ -14,7 +14,7 @@ import {
   DialogDescription, 
   DialogFooter, 
   DialogHeader, 
-  DialogTitle
+  DialogTitle,
 } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useForm } from "react-hook-form";
@@ -60,13 +60,13 @@ const Login = () => {
   // Redirect if already authenticated
   if (isAuthenticated) {
     // If user needs to reset password, redirect to reset page
-    if (user?.needsPasswordReset) {
+    if (user?.precisa_redefinir_senha) {
       console.log("User needs to reset password, redirecting");
       return <Navigate to="/reset-password" />;
     }
     
     // Role-based redirection
-    if (user?.role === "client") {
+    if (user?.role === "client" || user?.role === "cliente") {
       console.log("Client user authenticated, redirecting to projects");
       return <Navigate to="/meus-projetos" />;
     }
@@ -149,6 +149,7 @@ const Login = () => {
                     placeholder="seu@email.com" 
                     {...form.register("email")}
                     className="pl-10"
+                    autoComplete="email"
                   />
                 </div>
                 {form.formState.errors.email && (
@@ -174,6 +175,7 @@ const Login = () => {
                     placeholder="••••••••" 
                     {...form.register("password")}
                     className="pl-10"
+                    autoComplete="current-password"
                   />
                   <button 
                     type="button"

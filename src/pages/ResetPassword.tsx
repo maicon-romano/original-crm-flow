@@ -5,7 +5,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { Eye, EyeOff, Lock, ShieldCheck } from "lucide-react";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -50,9 +49,9 @@ const ResetPassword = () => {
     return <Navigate to="/login" />;
   }
   
-  if (isAuthenticated && !user?.needsPasswordReset) {
+  if (isAuthenticated && !user?.precisa_redefinir_senha) {
     // Role-based redirection
-    if (user?.role === "client") {
+    if (user?.role === "client" || user?.role === "cliente") {
       return <Navigate to="/meus-projetos" />;
     } else {
       return <Navigate to="/dashboard" />;
@@ -70,7 +69,7 @@ const ResetPassword = () => {
       
       // Redirect based on user role
       setTimeout(() => {
-        if (user?.role === "client") {
+        if (user?.role === "client" || user?.role === "cliente") {
           navigate("/meus-projetos");
         } else {
           navigate("/dashboard");
