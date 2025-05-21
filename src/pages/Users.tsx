@@ -42,7 +42,7 @@ const UsersPage = () => {
   }, [user, navigate, toast]);
 
   // If user is not admin, show loading or redirect
-  if (!user?.role === 'admin') {
+  if (user && user.role !== 'admin') {
     return (
       <div className="flex flex-col items-center justify-center h-64">
         <h2 className="text-xl font-semibold mb-2">Verificando permissões...</h2>
