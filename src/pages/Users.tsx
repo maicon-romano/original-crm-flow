@@ -33,8 +33,9 @@ import {
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, MoreHorizontal, Edit, Trash2, RefreshCcw, Loader2, UserCog } from "lucide-react";
+import { Search, Plus, MoreHorizontal, Edit, Trash2, RefreshCcw, Loader2, Mail } from "lucide-react";
 import { UserForm } from "@/components/users/UserForm";
+import { InviteUserDialog } from "@/components/users/InviteUserDialog";
 
 interface User {
   id: string;
@@ -55,6 +56,7 @@ const UsersPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
+  const [isInviteOpen, setIsInviteOpen] = useState(false);
   const { user } = useSupabaseAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -150,6 +152,7 @@ const UsersPage = () => {
   // Handle user create/edit complete
   const handleUserFormComplete = () => {
     setIsAddUserOpen(false);
+    setIsInviteOpen(false);
     // Refetch users
     const fetchUsers = async () => {
       try {
@@ -183,6 +186,24 @@ const UsersPage = () => {
     fetchUsers();
   };
 
+  // Reset user password
+  const handleResetPassword = async (email: string) => {
+    try {
+      sonnerToast.info("Enviando email de redefinição de senha...");
+      
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      
+      if (error) throw error;
+      
+      sonnerToast.success("Email de redefinição de senha enviado!");
+    } catch (error: any) {
+      console.error("Error resetting password:", error);
+      sonnerToast.error("Erro ao enviar redefinição de senha");
+    }
+  };
+
   // Check if current user is admin
   const isAdmin = user?.role === "admin";
 
@@ -211,6 +232,24 @@ const UsersPage = () => {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
+          
+          <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Mail className="mr-2 h-4 w-4" /> Convidar
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[600px]">
+              <DialogHeader>
+                <DialogTitle>Convidar Novo Usuário</DialogTitle>
+                <DialogDescription>
+                  Envie um convite por email para um novo usuário se cadastrar no sistema.
+                </DialogDescription>
+              </DialogHeader>
+              <InviteUserDialog onComplete={handleUserFormComplete} />
+            </DialogContent>
+          </Dialog>
+          
           <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
             <DialogTrigger asChild>
               <Button>
@@ -291,7 +330,7 @@ const UsersPage = () => {
                           <DropdownMenuItem>
                             <Edit className="mr-2 h-4 w-4" /> Editar
                           </DropdownMenuItem>
-                          <DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleResetPassword(userData.email)}>
                             <RefreshCcw className="mr-2 h-4 w-4" /> Redefinir Senha
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
