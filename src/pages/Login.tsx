@@ -1,255 +1,118 @@
 
-import { useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
+import { useState, FormEvent } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import { useSupabaseAuth } from "@/contexts/SupabaseAuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { useToast } from "@/components/ui/use-toast";
-import { Eye, EyeOff, Lock, Mail } from "lucide-react";
-import { 
-  Dialog,
-  DialogContent, 
-  DialogDescription, 
-  DialogFooter, 
-  DialogHeader, 
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
-
-const loginSchema = z.object({
-  email: z.string().email("Email inválido").min(1, "Email é obrigatório"),
-  password: z.string().min(1, "Senha é obrigatória"),
-});
-
-const forgotPasswordSchema = z.object({
-  email: z.string().email("Email inválido").min(1, "Email é obrigatório"),
-});
-
-type LoginFormValues = z.infer<typeof loginSchema>;
-type ForgotPasswordFormValues = z.infer<typeof forgotPasswordSchema>;
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ExclamationTriangleIcon } from "lucide-react";
+import { toast } from "sonner";
 
 const Login = () => {
-  const { login, isAuthenticated, user, resetPassword } = useAuth();
-  const { toast } = useToast();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const { login, isAuthenticated } = useSupabaseAuth();
   const navigate = useNavigate();
-  
-  const [showPassword, setShowPassword] = useState(false);
-  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
-
-  // Form setup with react-hook-form and zod validation
-  const form = useForm<LoginFormValues>({
-    resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: "",
-      password: "",
-    },
-  });
-
-  const forgotPasswordForm = useForm<ForgotPasswordFormValues>({
-    resolver: zodResolver(forgotPasswordSchema),
-    defaultValues: {
-      email: "",
-    },
-  });
+  const location = useLocation();
 
   // Redirect if already authenticated
   if (isAuthenticated) {
-    // If user needs to reset password, redirect to reset page
-    if (user?.precisa_redefinir_senha) {
-      console.log("User needs to reset password, redirecting");
-      return <Navigate to="/reset-password" />;
-    }
-    
-    // Role-based redirection
-    if (user?.role === "client" || user?.role === "cliente") {
-      console.log("Client user authenticated, redirecting to projects");
-      return <Navigate to="/meus-projetos" />;
-    }
-    
-    console.log("User is authenticated, redirecting to dashboard");
-    return <Navigate to="/dashboard" />;
+    const from = (location.state as any)?.from?.pathname || "/dashboard";
+    navigate(from, { replace: true });
+    return null;
   }
 
-  const onSubmit = async (values: LoginFormValues) => {
-    const { email, password } = values;
-    form.setValue("password", "");
-    
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setError("");
+    setIsSubmitting(true);
+
     try {
       await login(email, password);
-      console.log("Login successful, redirect will happen automatically");
-      toast({
-        title: "Login bem-sucedido",
-        description: "Você foi autenticado com sucesso.",
-      });
-    } catch (error) {
-      console.error("Login error:", error);
-      const errorMessage = error instanceof Error ? error.message : "Falha no login. Verifique suas credenciais.";
-      toast({
-        title: "Erro de autenticação",
-        description: errorMessage,
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleForgotPassword = async (values: ForgotPasswordFormValues) => {
-    const { email } = values;
-    
-    try {
-      await resetPassword(email);
-      setForgotPasswordOpen(false);
-      toast({
-        title: "Email enviado",
-        description: `Um email de redefinição de senha foi enviado para ${email}.`,
-      });
-      forgotPasswordForm.reset();
-    } catch (error) {
-      console.error("Password reset error:", error);
-      const errorMessage = error instanceof Error
-        ? error.message
-        : "Não foi possível enviar o email de redefinição. Verifique o endereço de email.";
-      
-      toast({
-        title: "Erro ao enviar email",
-        description: errorMessage,
-        variant: "destructive",
-      });
+      toast.success("Login bem-sucedido!");
+      // Navigation will happen automatically through auth state change
+    } catch (err: any) {
+      console.error("Login error:", err);
+      setError(err.message || "Erro ao fazer login. Verifique suas credenciais.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-primary">CRM Original Digital</h1>
-          <p className="text-muted-foreground mt-2">Acesse sua conta para continuar</p>
+    <div className="flex min-h-screen items-center justify-center bg-muted/40 p-4 dark:bg-gray-900">
+      <div className="w-full max-w-md space-y-8">
+        <div className="text-center">
+          <h2 className="text-3xl font-bold tracking-tight text-primary">Original Digital CRM</h2>
+          <p className="mt-2 text-gray-500 dark:text-gray-400">Entre com suas credenciais para acessar o sistema</p>
         </div>
         
-        <Card className="border-none shadow-lg">
-          <CardHeader>
-            <CardTitle>Login</CardTitle>
-            <CardDescription>
-              Entre com suas credenciais para acessar o sistema
-            </CardDescription>
-          </CardHeader>
-          <form onSubmit={form.handleSubmit(onSubmit)}>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                  <Input 
-                    id="email" 
-                    type="email" 
-                    placeholder="seu@email.com" 
-                    {...form.register("email")}
-                    className="pl-10"
-                    autoComplete="email"
-                  />
-                </div>
-                {form.formState.errors.email && (
-                  <p className="text-xs text-destructive mt-1">{form.formState.errors.email.message}</p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="password">Senha</Label>
-                  <button 
-                    type="button"
-                    onClick={() => setForgotPasswordOpen(true)}
-                    className="text-xs text-primary hover:underline"
-                  >
-                    Esqueceu a senha?
-                  </button>
-                </div>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                  <Input 
-                    id="password" 
-                    type={showPassword ? "text" : "password"} 
-                    placeholder="••••••••" 
-                    {...form.register("password")}
-                    className="pl-10"
-                    autoComplete="current-password"
-                  />
-                  <button 
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
-                </div>
-                {form.formState.errors.password && (
-                  <p className="text-xs text-destructive mt-1">{form.formState.errors.password.message}</p>
-                )}
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Button 
-                type="submit" 
-                className="w-full bg-primary hover:bg-primary/90"
-                disabled={form.formState.isSubmitting}
-              >
-                {form.formState.isSubmitting ? "Autenticando..." : "Entrar"}
-              </Button>
-            </CardFooter>
-          </form>
-        </Card>
-      </div>
-      
-      {/* Forgot Password Dialog */}
-      <Dialog open={forgotPasswordOpen} onOpenChange={setForgotPasswordOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Esqueceu sua senha?</DialogTitle>
-            <DialogDescription>
-              Informe seu email para receber as instruções de redefinição de senha.
-            </DialogDescription>
-          </DialogHeader>
-          <Form {...forgotPasswordForm}>
-            <form onSubmit={forgotPasswordForm.handleSubmit(handleForgotPassword)} className="space-y-4">
-              <FormField
-                control={forgotPasswordForm.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                      <FormControl>
-                        <Input className="pl-10" placeholder="seu@email.com" {...field} />
-                      </FormControl>
-                    </div>
-                    <FormMessage />
-                  </FormItem>
-                )}
+        <div className="bg-white p-8 shadow-lg rounded-lg dark:bg-gray-800">
+          {error && (
+            <Alert variant="destructive" className="mb-6">
+              <ExclamationTriangleIcon className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input 
+                id="email" 
+                type="email" 
+                value={email} 
+                onChange={(e) => setEmail(e.target.value)} 
+                placeholder="seu@email.com" 
+                required 
+                autoComplete="email"
               />
-              
-              <DialogFooter className="sm:justify-between">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setForgotPasswordOpen(false)}
+            </div>
+            
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Senha</Label>
+                <Link 
+                  to="/reset-password" 
+                  className="text-sm text-blue-600 hover:underline dark:text-blue-400"
                 >
-                  Cancelar
-                </Button>
-                <Button 
-                  type="submit"
-                  disabled={forgotPasswordForm.formState.isSubmitting}
-                >
-                  {forgotPasswordForm.formState.isSubmitting ? "Enviando..." : "Enviar instruções"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
-        </DialogContent>
-      </Dialog>
+                  Esqueceu a senha?
+                </Link>
+              </div>
+              <Input 
+                id="password" 
+                type="password" 
+                value={password} 
+                onChange={(e) => setPassword(e.target.value)} 
+                placeholder="********" 
+                required
+              />
+            </div>
+            
+            <Button 
+              type="submit" 
+              className="w-full" 
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <>
+                  <span className="mr-2 h-4 w-4 animate-spin rounded-full border-t-2 border-white"></span>
+                  Entrando...
+                </>
+              ) : (
+                "Entrar"
+              )}
+            </Button>
+          </form>
+        </div>
+        
+        <p className="text-center text-sm text-gray-600 dark:text-gray-400">
+          &copy; {new Date().getFullYear()} Original Digital. Todos os direitos reservados.
+        </p>
+      </div>
     </div>
   );
 };

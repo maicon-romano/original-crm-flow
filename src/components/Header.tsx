@@ -1,145 +1,200 @@
 
-import { useEffect, useState } from "react";
-import { useLocation } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
+import { useState, useEffect } from "react";
+import { Bell, LogOut, Moon, Sun, User, Settings } from "lucide-react";
+import { useSupabaseAuth } from "@/contexts/SupabaseAuthContext";
+import { useTheme } from "@/components/theme/ThemeProvider";
+import { Link } from "react-router-dom";
+import { toast } from "sonner";
+
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuLabel, 
-  DropdownMenuSeparator, 
-  DropdownMenuTrigger 
-} from "@/components/ui/dropdown-menu";
-import { Moon, Sun, User, Settings, LogOut, Bell } from "lucide-react";
-
-const routeTitles: Record<string, string> = {
-  "/dashboard": "Dashboard",
-  "/clients": "Clientes",
-  "/leads": "Leads",
-  "/projects": "Projetos",
-  "/tasks": "Tarefas",
-  "/proposals": "Propostas",
-  "/contracts": "Contratos",
-  "/finance": "Financeiro",
-  "/tickets": "Suporte",
-  "/files": "Arquivos",
-  "/calendar": "Calendário",
-  "/reports": "Relatórios",
-  "/settings": "Configurações",
-};
 
 export function Header() {
-  const { user, logout } = useAuth();
-  const location = useLocation();
-  const [theme, setTheme] = useState<"light" | "dark">("light");
-  const [pageTitle, setPageTitle] = useState("Dashboard");
-
-  // Update page title based on current route
+  const { user, logout } = useSupabaseAuth();
+  const { theme, setTheme } = useTheme();
+  const [notifications, setNotifications] = useState<any[]>([]);
+  
   useEffect(() => {
-    const path = location.pathname;
-    setPageTitle(routeTitles[path] || "CRM Original Digital");
-  }, [location]);
-
-  // Check system preference for theme on component mount
-  useEffect(() => {
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const storedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
-    
-    if (storedTheme) {
-      setTheme(storedTheme);
-      document.documentElement.classList.toggle("dark", storedTheme === "dark");
-    } else if (prefersDark) {
-      setTheme("dark");
-      document.documentElement.classList.add("dark");
-    }
+    // Fetch notifications (mock data for now)
+    setNotifications([
+      {
+        id: '1',
+        title: 'Nova tarefa',
+        message: 'Você foi designado para uma nova tarefa',
+        read: false,
+        time: '10m'
+      },
+      {
+        id: '2',
+        title: 'Lembrete',
+        message: 'Reunião com o cliente em 1 hora',
+        read: true,
+        time: '1h'
+      }
+    ]);
   }, []);
-
-  const toggleTheme = () => {
-    const newTheme = theme === "light" ? "dark" : "light";
-    setTheme(newTheme);
-    document.documentElement.classList.toggle("dark", newTheme === "dark");
-    localStorage.setItem("theme", newTheme);
+  
+  const unreadCount = notifications.filter(n => !n.read).length;
+  
+  const handleLogout = async () => {
+    try {
+      await logout();
+      toast.success("Logout realizado com sucesso");
+    } catch (error) {
+      console.error("Erro ao fazer logout:", error);
+      toast.error("Erro ao fazer logout");
+    }
   };
-
-  if (!user) return null;
-
-  const userInitials = user.name
-    .split(" ")
-    .map(name => name.charAt(0).toUpperCase())
-    .slice(0, 2)
-    .join("");
-
+  
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .substring(0, 2);
+  };
+  
   return (
-    <header className="border-b border-border bg-background sticky top-0 z-10">
-      <div className="container flex h-16 items-center justify-between px-4">
-        <h1 className="text-xl font-semibold">{pageTitle}</h1>
+    <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background px-6 dark:bg-gray-800 dark:border-gray-700">
+      <div className="flex-1"></div>
+      <div className="flex items-center gap-2">
+        {/* Theme Toggle */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon">
+              {theme === "light" ? (
+                <Sun className="h-5 w-5" />
+              ) : (
+                <Moon className="h-5 w-5" />
+              )}
+              <span className="sr-only">Toggle theme</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => setTheme("light")}>
+              <Sun className="mr-2 h-4 w-4" />
+              <span>Claro</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setTheme("dark")}>
+              <Moon className="mr-2 h-4 w-4" />
+              <span>Escuro</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setTheme("system")}>
+              <Settings className="mr-2 h-4 w-4" />
+              <span>Sistema</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         
-        <div className="flex items-center gap-2">
-          {/* Theme toggle */}
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={toggleTheme}
-            className="rounded-full"
-          >
-            {theme === "light" ? (
-              <Moon className="h-5 w-5" />
-            ) : (
-              <Sun className="h-5 w-5" />
-            )}
-          </Button>
-
-          {/* Notifications */}
-          <Button 
-            variant="ghost" 
-            size="icon"
-            className="rounded-full relative"
-          >
-            <Bell className="h-5 w-5" />
-            <span className="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full"></span>
-          </Button>
-          
-          {/* User menu */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-                <Avatar>
-                  <AvatarImage src={user.avatar} />
-                  <AvatarFallback className="bg-primary text-primary-foreground">
-                    {userInitials}
-                  </AvatarFallback>
-                </Avatar>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-56" align="end" forceMount>
-              <DropdownMenuLabel>
-                <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium leading-none">{user.name}</p>
-                  <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
-                  <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary-foreground mt-2">
-                    {user.role === "admin" ? "Administrador" : user.role === "user" ? "Usuário" : "Cliente"}
-                  </span>
+        {/* Notifications */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="ghost" size="icon" className="relative">
+              <Bell className="h-5 w-5" />
+              {unreadCount > 0 && (
+                <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0">
+                  {unreadCount}
+                </Badge>
+              )}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-80" align="end">
+            <div className="space-y-2">
+              <h4 className="font-medium leading-none">Notificações</h4>
+              <p className="text-sm text-muted-foreground">
+                {unreadCount ? `Você tem ${unreadCount} notificações não lidas` : 'Nenhuma notificação não lida'}
+              </p>
+            </div>
+            <div className="mt-2 max-h-80 overflow-auto">
+              {notifications.length === 0 ? (
+                <div className="text-center py-4 text-muted-foreground">
+                  Nenhuma notificação
                 </div>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem>
+              ) : (
+                notifications.map((notification) => (
+                  <div
+                    key={notification.id}
+                    className={`flex items-start gap-4 p-2 rounded-lg ${
+                      !notification.read ? 'bg-muted' : ''
+                    }`}
+                  >
+                    <div className="flex-1 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-medium">{notification.title}</p>
+                        <span className="text-xs text-muted-foreground">{notification.time}</span>
+                      </div>
+                      <p className="text-sm">{notification.message}</p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="mt-2 border-t pt-2 dark:border-gray-700">
+              <Button variant="ghost" size="sm" className="w-full">
+                Ver todas as notificações
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
+        
+        {/* User Menu */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+              <Avatar>
+                <AvatarImage src={user?.avatar_url || undefined} alt={user?.name || ""} />
+                <AvatarFallback>{user ? getInitials(user.name) : "?"}</AvatarFallback>
+              </Avatar>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-56" align="end" forceMount>
+            <div className="flex items-center justify-start gap-2 p-2">
+              <div className="flex flex-col space-y-1 leading-none">
+                <p className="font-medium">{user?.name}</p>
+                <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+              </div>
+            </div>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link to="/settings" className="w-full flex cursor-pointer">
                 <User className="mr-2 h-4 w-4" />
                 <span>Meu Perfil</span>
+              </Link>
+            </DropdownMenuItem>
+            {user?.role === "admin" && (
+              <DropdownMenuItem asChild>
+                <Link to="/settings" className="w-full flex cursor-pointer">
+                  <Settings className="mr-2 h-4 w-4" />
+                  <span>Configurações</span>
+                </Link>
               </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Settings className="mr-2 h-4 w-4" />
-                <span>Configurações</span>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={logout}>
-                <LogOut className="mr-2 h-4 w-4" />
-                <span>Sair</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="cursor-pointer"
+              onClick={handleLogout}
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              <span>Sair</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   );

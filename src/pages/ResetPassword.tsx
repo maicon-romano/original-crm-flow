@@ -1,179 +1,221 @@
-
-import { useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
+import { useState, FormEvent } from "react";
+import { useNavigate } from "react-router-dom";
+import { useSupabaseAuth } from "@/contexts/SupabaseAuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { useToast } from "@/components/ui/use-toast";
-import { Eye, EyeOff, Lock, ShieldCheck } from "lucide-react";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
-
-const passwordSchema = z
-  .object({
-    newPassword: z
-      .string()
-      .min(8, "A senha deve ter pelo menos 8 caracteres")
-      .regex(/[A-Z]/, "A senha deve conter pelo menos uma letra maiúscula")
-      .regex(/[0-9]/, "A senha deve conter pelo menos um número"),
-    confirmPassword: z.string(),
-  })
-  .refine(data => data.newPassword === data.confirmPassword, {
-    message: "As senhas não conferem",
-    path: ["confirmPassword"],
-  });
-
-type PasswordFormValues = z.infer<typeof passwordSchema>;
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ExclamationTriangleIcon, CheckCircleIcon } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 const ResetPassword = () => {
-  const { user, isAuthenticated, updateUserPassword } = useAuth();
-  const { toast } = useToast();
+  const [isEmailMode, setIsEmailMode] = useState(true);
+  const [email, setEmail] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const { resetPassword, updateUserPassword, user, isAuthenticated } = useSupabaseAuth();
   const navigate = useNavigate();
-  
-  const [showPassword, setShowPassword] = useState(false);
 
-  // Form setup with react-hook-form and zod validation
-  const form = useForm<PasswordFormValues>({
-    resolver: zodResolver(passwordSchema),
-    defaultValues: {
-      newPassword: "",
-      confirmPassword: "",
-    },
+  // Determine if we're in email request mode or set new password mode
+  // If user is already logged in and needs to reset password, show the password form
+  // Otherwise, show email form
+  useState(() => {
+    if (isAuthenticated && user?.needs_password_reset) {
+      setIsEmailMode(false);
+    }
   });
 
-  // Only users who need to reset password should access this page
-  if (!isAuthenticated) {
-    return <Navigate to="/login" />;
-  }
-  
-  if (isAuthenticated && !user?.precisa_redefinir_senha) {
-    // Role-based redirection
-    if (user?.role === "client" || user?.role === "cliente") {
-      return <Navigate to="/meus-projetos" />;
-    } else {
-      return <Navigate to="/dashboard" />;
-    }
-  }
+  const handleEmailSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+    setIsSubmitting(true);
 
-  const onSubmit = async (values: PasswordFormValues) => {
     try {
-      await updateUserPassword(values.newPassword);
-      
-      toast({
-        title: "Senha atualizada",
-        description: "Sua senha foi alterada com sucesso.",
-      });
-      
-      // Redirect based on user role
-      setTimeout(() => {
-        if (user?.role === "client" || user?.role === "cliente") {
-          navigate("/meus-projetos");
-        } else {
-          navigate("/dashboard");
-        }
-      }, 1500);
-    } catch (error) {
-      toast({
-        title: "Erro ao redefinir senha",
-        description: error instanceof Error 
-          ? error.message 
-          : "Ocorreu um erro ao redefinir sua senha. Por favor, tente novamente.",
-        variant: "destructive",
-      });
+      await resetPassword(email);
+      setSuccess("Email de redefinição de senha enviado. Verifique sua caixa de entrada.");
+    } catch (err: any) {
+      setError(err.message || "Erro ao enviar email de redefinição de senha.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-primary">CRM Original Digital</h1>
-          <p className="text-muted-foreground mt-2">Redefina sua senha para continuar</p>
-        </div>
-        
-        <Card className="border-none shadow-lg">
+  const handlePasswordSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+    setIsSubmitting(true);
+
+    // Validate passwords
+    if (newPassword.length < 6) {
+      setError("A senha deve ter pelo menos 6 caracteres.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setError("As senhas não coincidem.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    try {
+      await updateUserPassword(newPassword);
+      setSuccess("Senha atualizada com sucesso!");
+      
+      // Redirect to dashboard after a short delay
+      setTimeout(() => {
+        navigate("/dashboard");
+      }, 1500);
+    } catch (err: any) {
+      setError(err.message || "Erro ao atualizar senha.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Email request form
+  if (isEmailMode) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-muted/40 p-4 dark:bg-gray-900">
+        <Card className="w-full max-w-md shadow-lg">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ShieldCheck className="h-6 w-6 text-primary" />
-              Redefinir Senha
-            </CardTitle>
+            <CardTitle className="text-2xl">Redefinir Senha</CardTitle>
             <CardDescription>
-              Por segurança, você precisa criar uma nova senha antes de continuar.
+              Informe seu email e enviaremos um link para redefinir sua senha.
             </CardDescription>
           </CardHeader>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)}>
-              <CardContent className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="newPassword"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Nova Senha</FormLabel>
-                      <div className="relative">
-                        <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                        <FormControl>
-                          <Input
-                            type={showPassword ? "text" : "password"}
-                            className="pl-10"
-                            placeholder="Digite sua nova senha"
-                            {...field}
-                          />
-                        </FormControl>
-                        <button 
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                        >
-                          {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                        </button>
-                      </div>
-                      <FormMessage />
-                      <p className="text-xs text-muted-foreground mt-1">
-                        A senha deve ter pelo menos 8 caracteres, uma letra maiúscula e um número.
-                      </p>
-                    </FormItem>
-                  )}
+          <CardContent>
+            {error && (
+              <Alert variant="destructive" className="mb-6">
+                <ExclamationTriangleIcon className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+            
+            {success && (
+              <Alert className="mb-6 border-green-500 text-green-600 bg-green-50 dark:bg-green-900 dark:text-green-200">
+                <CheckCircleIcon className="h-4 w-4" />
+                <AlertDescription>{success}</AlertDescription>
+              </Alert>
+            )}
+            
+            <form onSubmit={handleEmailSubmit} className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input 
+                  id="email" 
+                  type="email" 
+                  value={email} 
+                  onChange={(e) => setEmail(e.target.value)} 
+                  placeholder="seu@email.com" 
+                  required 
                 />
-                
-                <FormField
-                  control={form.control}
-                  name="confirmPassword"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Confirmar Senha</FormLabel>
-                      <div className="relative">
-                        <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                        <FormControl>
-                          <Input
-                            type={showPassword ? "text" : "password"}
-                            className="pl-10"
-                            placeholder="Confirme sua nova senha"
-                            {...field}
-                          />
-                        </FormControl>
-                      </div>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </CardContent>
-              <CardFooter>
+              </div>
+              
+              <div className="flex flex-col space-y-3">
                 <Button 
                   type="submit" 
-                  className="w-full bg-primary hover:bg-primary/90"
-                  disabled={form.formState.isSubmitting}
+                  className="w-full" 
+                  disabled={isSubmitting || !!success}
                 >
-                  {form.formState.isSubmitting ? "Processando..." : "Redefinir Senha"}
+                  {isSubmitting ? (
+                    <>
+                      <span className="mr-2 h-4 w-4 animate-spin rounded-full border-t-2 border-white"></span>
+                      Enviando...
+                    </>
+                  ) : (
+                    "Enviar Link de Redefinição"
+                  )}
                 </Button>
-              </CardFooter>
+                
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => navigate("/login")}
+                  className="w-full"
+                >
+                  Voltar para Login
+                </Button>
+              </div>
             </form>
-          </Form>
+          </CardContent>
         </Card>
       </div>
+    );
+  }
+
+  // Set new password form (for logged in users that need to reset)
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-muted/40 p-4 dark:bg-gray-900">
+      <Card className="w-full max-w-md shadow-lg">
+        <CardHeader>
+          <CardTitle className="text-2xl">Definir Nova Senha</CardTitle>
+          <CardDescription>
+            É necessário criar uma nova senha para continuar usando o sistema.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {error && (
+            <Alert variant="destructive" className="mb-6">
+              <ExclamationTriangleIcon className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          
+          {success && (
+            <Alert className="mb-6 border-green-500 text-green-600 bg-green-50 dark:bg-green-900 dark:text-green-200">
+              <CheckCircleIcon className="h-4 w-4" />
+              <AlertDescription>{success}</AlertDescription>
+            </Alert>
+          )}
+          
+          <form onSubmit={handlePasswordSubmit} className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="new-password">Nova Senha</Label>
+              <Input 
+                id="new-password" 
+                type="password" 
+                value={newPassword} 
+                onChange={(e) => setNewPassword(e.target.value)} 
+                placeholder="********" 
+                required 
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="confirm-password">Confirmar Senha</Label>
+              <Input 
+                id="confirm-password" 
+                type="password" 
+                value={confirmPassword} 
+                onChange={(e) => setConfirmPassword(e.target.value)} 
+                placeholder="********" 
+                required 
+              />
+            </div>
+            
+            <Button 
+              type="submit" 
+              className="w-full" 
+              disabled={isSubmitting || !!success}
+            >
+              {isSubmitting ? (
+                <>
+                  <span className="mr-2 h-4 w-4 animate-spin rounded-full border-t-2 border-white"></span>
+                  Atualizando...
+                </>
+              ) : (
+                "Atualizar Senha"
+              )}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 };

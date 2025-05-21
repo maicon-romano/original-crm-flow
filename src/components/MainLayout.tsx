@@ -1,7 +1,7 @@
 
 import React, { useEffect } from "react";
 import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
+import { useSupabaseAuth } from "@/contexts/SupabaseAuthContext";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 
@@ -21,15 +21,17 @@ const ADMIN_ONLY_ROUTES = [
   "/contratos",
   "/relatorios",
   "/usuarios", 
-  "/users"
+  "/users",
+  "/settings",
+  "/reports"
 ];
 
 export function MainLayout() {
-  const { isAuthenticated, user, loading } = useAuth();
+  const { isAuthenticated, user, loading } = useSupabaseAuth();
   const location = useLocation();
   const navigate = useNavigate();
   
-  // Debug authentication status with more user details
+  // Debug authentication status with user details
   useEffect(() => {
     console.log("MainLayout - Auth status:", { 
       isAuthenticated, 
@@ -38,7 +40,6 @@ export function MainLayout() {
         name: user.name,
         email: user.email,
         role: user.role,
-        userType: user.userType,
       } : null, 
       loading, 
       path: location.pathname 
@@ -48,12 +49,10 @@ export function MainLayout() {
   useEffect(() => {
     // Check permissions for current route
     if (isAuthenticated && user && !loading) {
-      // Check if user is admin - prioritizing special email or role/userType fields
-      const isAdmin = user.email === "maicon.romano@originaldigital.com.br" || 
-                     user.role === "admin" || 
-                     user.userType === "admin";
+      // Check if user is admin
+      const isAdmin = user.role === "admin";
                      
-      console.log(`User role check - role: ${user.role}, userType: ${user.userType}, isAdmin: ${isAdmin}`);
+      console.log(`User role check - role: ${user.role}, isAdmin: ${isAdmin}`);
       
       // If user is client and trying to access a non-client route
       if (user.role === "client" && 
@@ -88,7 +87,7 @@ export function MainLayout() {
   }
 
   // Redirect to reset password page if user needs to reset password
-  if (user?.precisa_redefinir_senha) {
+  if (user?.needs_password_reset) {
     console.log("User needs password reset, redirecting");
     return <Navigate to="/reset-password" replace />;
   }
@@ -101,7 +100,7 @@ export function MainLayout() {
 
   console.log("Rendering main layout for authenticated user");
   return (
-    <div className="flex min-h-screen bg-muted/30">
+    <div className="flex min-h-screen bg-muted/30 dark:bg-gray-900">
       <Sidebar />
       <div className="flex-1 flex flex-col">
         <Header />

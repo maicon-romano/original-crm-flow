@@ -2,10 +2,8 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useToast } from "@/components/ui/use-toast";
-import { createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
@@ -32,7 +30,6 @@ interface UserFormProps {
 
 export const UserForm = ({ onComplete, user }: UserFormProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { toast } = useToast();
   
   // Initialize form
   const form = useForm<UserFormValues>({
@@ -53,45 +50,52 @@ export const UserForm = ({ onComplete, user }: UserFormProps) => {
       // Generate temporary password
       const tempPassword = generateTemporaryPassword();
       
-      // Create firebase auth user
-      const userCredential = await createUserWithEmailAndPassword(auth, data.email, tempPassword);
-      const uid = userCredential.user.uid;
-      
-      // Create user document
-      await setDoc(doc(db, "users", uid), {
-        ...data,
-        active: true,
-        username: data.email.split('@')[0],
-        lastTempPassword: tempPassword,
-        precisa_redefinir_senha: true,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        userType: data.role, // For consistency
+      // Create supabase auth user
+      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+        email: data.email,
+        password: tempPassword,
+        email_confirm: true, // Auto-confirm email
+        user_metadata: { 
+          name: data.name,
+          role: data.role
+        }
       });
       
-      toast({
-        title: "Usuário criado com sucesso",
-        description: `${data.name} foi cadastrado e receberá um email com os dados de acesso.`,
+      if (authError) {
+        throw authError;
+      }
+      
+      // The user record in the public.users table will be automatically created
+      // via the trigger we set up in the database
+      
+      // However, we need to update some additional fields that aren't handled by the trigger
+      const { error: updateError } = await supabase
+        .from("users")
+        .update({
+          phone: data.phone || null,
+          position: data.position || null,
+          last_temp_password: tempPassword
+        })
+        .eq("id", authData.user.id);
+      
+      if (updateError) {
+        throw updateError;
+      }
+      
+      toast.success(`${data.name} foi cadastrado com sucesso`, {
+        description: `Senha temporária: ${tempPassword}`
       });
       
-      // TODO: Send email with temporary password
+      // TODO: Implement email sending via Resend Edge Function
       
       onComplete();
     } catch (error: any) {
       console.error("Error creating user:", error);
       
-      if (error.code === 'auth/email-already-in-use') {
-        toast({
-          title: "Erro ao criar usuário",
-          description: "Este email já está em uso. Tente outro email.",
-          variant: "destructive",
-        });
+      if (error.message?.includes("already taken")) {
+        toast.error("Este email já está em uso. Tente outro email.");
       } else {
-        toast({
-          title: "Erro ao criar usuário",
-          description: error.message || "Ocorreu um erro ao criar o usuário.",
-          variant: "destructive",
-        });
+        toast.error(error.message || "Ocorreu um erro ao criar o usuário.");
       }
     } finally {
       setIsSubmitting(false);
@@ -172,6 +176,7 @@ export const UserForm = ({ onComplete, user }: UserFormProps) => {
                     <SelectContent>
                       <SelectItem value="admin">Administrador</SelectItem>
                       <SelectItem value="user">Funcionário</SelectItem>
+                      <SelectItem value="client">Cliente</SelectItem>
                     </SelectContent>
                   </Select>
                 </FormControl>

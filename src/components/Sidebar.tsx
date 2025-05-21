@@ -1,237 +1,331 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useSupabaseAuth } from "@/contexts/SupabaseAuthContext";
 import { 
-  Activity, 
+  LayoutDashboard, 
   Users, 
-  ArrowRight, 
+  Send, 
   FileText, 
-  ListChecks, 
-  FilePen, 
-  FileSignature, 
+  ListTodo, 
+  FileContract, 
   DollarSign,
-  Ticket, 
-  Folder,
-  Calendar,
-  BarChart2,
+  TicketCheck, 
+  FolderOpen, 
+  Calendar, 
+  BarChart4, 
   Settings,
   Menu,
   X,
-  LogOut
+  ChevronDown,
+  ChevronRight
 } from "lucide-react";
+import { useMobile } from "@/hooks/use-mobile";
 
-interface NavItemProps {
-  to: string;
-  icon: React.ElementType;
-  label: string;
-  isActive: boolean;
-  isCollapsed: boolean;
+interface SidebarNavItem {
+  title: string;
+  href: string;
+  icon: React.ReactNode;
+  adminOnly?: boolean;
+  clientOnly?: boolean;
+  submenu?: SidebarNavItem[];
+  open?: boolean;
 }
 
-const NavItem = ({ to, icon: Icon, label, isActive, isCollapsed }: NavItemProps) => {
-  return (
-    <TooltipProvider delayDuration={0}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Link to={to} className="w-full">
-            <Button
-              variant="ghost"
-              size={isCollapsed ? "icon" : "default"}
-              className={cn(
-                "w-full justify-start",
-                isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : "hover:bg-sidebar-accent/50"
-              )}
-            >
-              <Icon className={cn("h-5 w-5", isCollapsed ? "" : "mr-2")} />
-              {!isCollapsed && <span>{label}</span>}
-            </Button>
-          </Link>
-        </TooltipTrigger>
-        {isCollapsed && (
-          <TooltipContent side="right" className="border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground">
-            {label}
-          </TooltipContent>
-        )}
-      </Tooltip>
-    </TooltipProvider>
-  );
-};
-
 export function Sidebar() {
-  const { user, logout } = useAuth();
   const location = useLocation();
-  const [isCollapsed, setIsCollapsed] = useState(false);
-
-  if (!user) return null;
-
-  // Priority check for admin - special email or role/userType
-  const isAdmin = user.email === "maicon.romano@originaldigital.com.br" || 
-                 user.role === "admin" || 
-                 user.userType === "admin";
-                 
-  const isStaff = isAdmin || user.role === "user" || user.role === "funcionario" || user.role === "usuario";
-  const isClient = user.role === "client" || user.role === "cliente";
+  const { user } = useSupabaseAuth();
+  const [isOpen, setIsOpen] = useState(false);
+  const [navItems, setNavItems] = useState<SidebarNavItem[]>([]);
+  const { isMobile } = useMobile();
   
-  console.log("Sidebar - User role:", user.role, "userType:", user.userType, "isAdmin:", isAdmin);
+  // Determine if the user is an admin
+  const isAdmin = user?.role === "admin";
+  const isClient = user?.role === "client";
   
-  const navItems = [
-    {
-      to: "/dashboard",
-      icon: Activity,
-      label: "Dashboard",
-      visible: true,
-    },
-    {
-      to: "/clients",
-      icon: Users,
-      label: "Clientes",
-      visible: isStaff,
-    },
-    {
-      to: "/leads",
-      icon: ArrowRight,
-      label: "Leads",
-      visible: isStaff,
-    },
-    {
-      to: "/projects",
-      icon: FileText,
-      label: "Projetos",
-      visible: true,
-    },
-    {
-      to: "/tasks",
-      icon: ListChecks,
-      label: "Tarefas",
-      visible: true,
-    },
-    {
-      to: "/proposals",
-      icon: FilePen,
-      label: "Propostas",
-      visible: isStaff,
-    },
-    {
-      to: "/contracts",
-      icon: FileSignature,
-      label: "Contratos",
-      visible: isAdmin,
-    },
-    {
-      to: "/finance",
-      icon: DollarSign,
-      label: "Financeiro",
-      visible: isAdmin || isClient,
-    },
-    {
-      to: "/tickets",
-      icon: Ticket,
-      label: "Suporte",
-      visible: true,
-    },
-    {
-      to: "/files",
-      icon: Folder,
-      label: "Arquivos",
-      visible: true,
-    },
-    {
-      to: "/usuarios",
-      icon: Users, 
-      label: "Usuários",
-      visible: isAdmin,
-    },
-    {
-      to: "/calendar",
-      icon: Calendar,
-      label: "Calendário",
-      visible: true,
-    },
-    {
-      to: "/reports",
-      icon: BarChart2,
-      label: "Relatórios",
-      visible: isAdmin,
-    },
-    {
-      to: "/settings",
-      icon: Settings,
-      label: "Configurações",
-      visible: isAdmin,
-    },
-  ];
-
-  const visibleNavItems = navItems.filter(item => item.visible);
+  // Log for debugging
+  console.log("Sidebar - User role:", user?.role, "userType:", user?.userType, "isAdmin:", isAdmin);
+  
+  useEffect(() => {
+    // Define navigation items based on user role
+    let items: SidebarNavItem[] = [];
+    
+    // Items for admin and staff users
+    if (!isClient) {
+      items = [
+        {
+          title: "Dashboard",
+          href: "/dashboard",
+          icon: <LayoutDashboard className="h-5 w-5" />,
+        },
+        {
+          title: "Clientes",
+          href: "/clients",
+          icon: <Users className="h-5 w-5" />,
+        },
+        {
+          title: "Leads",
+          href: "/leads",
+          icon: <Send className="h-5 w-5" />,
+        },
+        {
+          title: "Projetos",
+          href: "/projects",
+          icon: <FileText className="h-5 w-5" />,
+        },
+        {
+          title: "Tarefas",
+          href: "/tasks",
+          icon: <ListTodo className="h-5 w-5" />,
+        },
+        {
+          title: "Propostas",
+          href: "/proposals",
+          icon: <FileText className="h-5 w-5" />,
+          adminOnly: true,
+        },
+        {
+          title: "Contratos",
+          href: "/contracts",
+          icon: <FileContract className="h-5 w-5" />,
+          adminOnly: true,
+        },
+        {
+          title: "Financeiro",
+          href: "/finance",
+          icon: <DollarSign className="h-5 w-5" />,
+          adminOnly: true,
+        },
+        {
+          title: "Tickets",
+          href: "/tickets",
+          icon: <TicketCheck className="h-5 w-5" />,
+        },
+        {
+          title: "Arquivos",
+          href: "/files",
+          icon: <FolderOpen className="h-5 w-5" />,
+        },
+        {
+          title: "Calendário",
+          href: "/calendar",
+          icon: <Calendar className="h-5 w-5" />,
+        },
+        {
+          title: "Relatórios",
+          href: "/reports",
+          icon: <BarChart4 className="h-5 w-5" />,
+          adminOnly: true,
+        },
+        {
+          title: "Usuários",
+          href: "/users",
+          icon: <Users className="h-5 w-5" />,
+          adminOnly: true,
+        },
+        {
+          title: "Configurações",
+          href: "/settings",
+          icon: <Settings className="h-5 w-5" />,
+          adminOnly: true,
+        },
+      ];
+    } 
+    // Items for client users
+    else {
+      items = [
+        {
+          title: "Dashboard",
+          href: "/dashboard",
+          icon: <LayoutDashboard className="h-5 w-5" />,
+        },
+        {
+          title: "Meus Projetos",
+          href: "/meus-projetos",
+          icon: <FileText className="h-5 w-5" />,
+          clientOnly: true,
+        },
+        {
+          title: "Minhas Tarefas",
+          href: "/minhas-tarefas",
+          icon: <ListTodo className="h-5 w-5" />,
+          clientOnly: true,
+        },
+        {
+          title: "Meus Arquivos",
+          href: "/meus-arquivos",
+          icon: <FolderOpen className="h-5 w-5" />,
+          clientOnly: true,
+        },
+        {
+          title: "Minhas Faturas",
+          href: "/minhas-faturas",
+          icon: <DollarSign className="h-5 w-5" />,
+          clientOnly: true,
+        },
+        {
+          title: "Meu Perfil",
+          href: "/meu-perfil",
+          icon: <Users className="h-5 w-5" />,
+          clientOnly: true,
+        },
+      ];
+    }
+    
+    // Filter items based on user role
+    const filteredItems = items.filter(item => {
+      if (item.adminOnly && !isAdmin) return false;
+      if (item.clientOnly && !isClient) return false;
+      return true;
+    });
+    
+    setNavItems(filteredItems);
+    
+    // Close mobile sidebar when route changes
+    if (isMobile) {
+      setIsOpen(false);
+    }
+  }, [isAdmin, isClient, user, isMobile, location.pathname]);
+  
+  // Toggle submenu
+  const toggleSubmenu = (index: number) => {
+    setNavItems(currentItems =>
+      currentItems.map((item, i) =>
+        i === index ? { ...item, open: !item.open } : item
+      )
+    );
+  };
+  
+  // Close mobile sidebar if screen is resized to desktop
+  useEffect(() => {
+    if (!isMobile && isOpen) {
+      setIsOpen(false);
+    }
+  }, [isMobile]);
 
   return (
-    <aside
-      className={cn(
-        "flex flex-col border-r border-sidebar-border bg-sidebar transition-all duration-300 h-screen sticky top-0",
-        isCollapsed ? "w-16" : "w-64"
-      )}
-    >
-      <div className="flex justify-between items-center p-4">
-        {!isCollapsed && (
-          <h2 className="font-bold text-sidebar-foreground text-lg">
-            Original Digital
-          </h2>
-        )}
+    <>
+      {/* Mobile Menu Toggle */}
+      {isMobile && (
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => setIsCollapsed(!isCollapsed)}
-          className="h-8 w-8 text-sidebar-foreground"
+          className="fixed top-4 left-4 z-50 md:hidden"
+          onClick={() => setIsOpen(!isOpen)}
         >
-          {isCollapsed ? <Menu /> : <X size={18} />}
+          {isOpen ? (
+            <X className="h-6 w-6" />
+          ) : (
+            <Menu className="h-6 w-6" />
+          )}
         </Button>
+      )}
+      
+      {/* Sidebar */}
+      <div
+        className={cn(
+          "fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r bg-white transition-transform dark:bg-gray-800 dark:border-gray-700",
+          isMobile && !isOpen && "-translate-x-full",
+          isMobile && isOpen && "translate-x-0"
+        )}
+      >
+        {/* Logo */}
+        <div className="flex h-16 items-center border-b px-6 dark:border-gray-700">
+          <Link to="/" className="flex items-center gap-2">
+            <span className="text-xl font-bold text-primary">Original Digital</span>
+          </Link>
+        </div>
+        
+        {/* Navigation Items */}
+        <ScrollArea className="flex-1 py-4">
+          <nav className="grid gap-1 px-2">
+            {navItems.map((item, index) => (
+              <div key={item.title}>
+                {item.submenu ? (
+                  <div className="space-y-1">
+                    <Button
+                      variant="ghost"
+                      className="w-full justify-between"
+                      onClick={() => toggleSubmenu(index)}
+                    >
+                      <span className="flex items-center gap-2">
+                        {item.icon}
+                        {item.title}
+                      </span>
+                      {item.open ? (
+                        <ChevronDown className="h-4 w-4" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4" />
+                      )}
+                    </Button>
+                    
+                    {item.open && item.submenu && (
+                      <div className="ml-6 space-y-1 border-l dark:border-gray-700 pl-2">
+                        {item.submenu.map((subitem) => (
+                          <Button
+                            key={subitem.href}
+                            variant="ghost"
+                            asChild
+                            className={cn(
+                              "w-full justify-start",
+                              subitem.href === location.pathname && "bg-muted"
+                            )}
+                          >
+                            <Link to={subitem.href} className="flex items-center gap-2">
+                              {subitem.icon}
+                              {subitem.title}
+                            </Link>
+                          </Button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    asChild
+                    className={cn(
+                      "w-full justify-start",
+                      item.href === location.pathname && "bg-muted dark:bg-gray-700"
+                    )}
+                  >
+                    <Link to={item.href} className="flex items-center gap-2">
+                      {item.icon}
+                      {item.title}
+                    </Link>
+                  </Button>
+                )}
+              </div>
+            ))}
+          </nav>
+        </ScrollArea>
+        
+        {/* User Info */}
+        {user && (
+          <div className="border-t p-4 dark:border-gray-700">
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium">
+                {user.name?.slice(0, 1) || "U"}
+              </div>
+              <div className="flex-1 overflow-hidden">
+                <p className="truncate font-medium">{user.name}</p>
+                <p className="text-xs text-muted-foreground truncate">{user.role === "admin" ? "Administrador" : user.role === "user" ? "Equipe" : "Cliente"}</p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
       
-      <Separator className="bg-sidebar-border" />
-      
-      <div className="flex-1 overflow-auto py-2 px-2">
-        <nav className="grid gap-1">
-          {visibleNavItems.map((item) => (
-            <NavItem
-              key={item.to}
-              to={item.to}
-              icon={item.icon}
-              label={item.label}
-              isActive={location.pathname === item.to}
-              isCollapsed={isCollapsed}
-            />
-          ))}
-        </nav>
-      </div>
-      
-      <Separator className="bg-sidebar-border" />
-      
-      <div className="p-4">
-        <TooltipProvider delayDuration={0}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size={isCollapsed ? "icon" : "default"}
-                className="w-full justify-start text-sidebar-foreground hover:bg-sidebar-accent/50"
-                onClick={logout}
-              >
-                <LogOut className={cn("h-5 w-5", isCollapsed ? "" : "mr-2")} />
-                {!isCollapsed && "Sair"}
-              </Button>
-            </TooltipTrigger>
-            {isCollapsed && (
-              <TooltipContent side="right" className="border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground">
-                Sair
-              </TooltipContent>
-            )}
-          </Tooltip>
-        </TooltipProvider>
-      </div>
-    </aside>
+      {/* Overlay for mobile */}
+      {isMobile && isOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/50"
+          onClick={() => setIsOpen(false)}
+        />
+      )}
+    </>
   );
 }

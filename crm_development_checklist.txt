@@ -1,0 +1,116 @@
+
+# CRM Original Digital - Checklist de Desenvolvimento
+
+## Autenticação e Usuários
+- [X] Configuração do Supabase para autenticação
+- [X] Criação das tabelas de usuários
+- [X] Página de login
+- [X] Redefinição de senha
+- [X] Controle de acesso baseado em função (RBAC)
+- [ ] Convite para novos usuários
+- [ ] Página de configuração de perfil
+- [ ] Upload de avatar
+
+## Interface e Design
+- [X] Tema claro/escuro
+- [X] Layout responsivo
+- [X] Dashboard inicial
+- [X] Componentes de UI reutilizáveis
+- [ ] Toasts e notificações
+- [ ] Layout adaptativo para dispositivos móveis
+
+## Módulos e Funcionalidades
+
+### Clientes
+- [X] Estrutura da tabela de clientes
+- [X] RLS para controle de acesso
+- [ ] Listagem de clientes
+- [ ] Formulário de cadastro de clientes
+- [ ] Visualização detalhada de cliente
+- [ ] Integração com Google Drive para pastas de clientes
+
+### Leads
+- [X] Estrutura da tabela de leads
+- [X] RLS para controle de acesso
+- [ ] Listagem de leads
+- [ ] Formulário de cadastro de leads
+- [ ] Pipeline visual (Kanban)
+- [ ] Conversão de lead para cliente
+
+### Projetos
+- [X] Estrutura da tabela de projetos
+- [X] RLS para controle de acesso
+- [ ] Listagem de projetos
+- [ ] Formulário de cadastro de projetos
+- [ ] Visualização detalhada de projeto
+- [ ] Associação com clientes e tarefas
+
+### Tarefas
+- [X] Estrutura da tabela de tarefas
+- [X] RLS para controle de acesso
+- [ ] Listagem de tarefas
+- [ ] Formulário de cadastro de tarefas
+- [ ] Kanban de tarefas
+- [ ] Atribuição de tarefas a usuários
+
+### Propostas e Contratos
+- [X] Estrutura das tabelas de propostas e contratos
+- [X] RLS para controle de acesso
+- [ ] Editor de propostas com HTML e variáveis
+- [ ] Geração de contratos a partir de propostas
+- [ ] Visualização de propostas/contratos
+- [ ] Sistema de assinatura digital
+
+### Financeiro
+- [X] Estrutura das tabelas de faturas e transações
+- [X] RLS para controle de acesso
+- [ ] Listagem de faturas
+- [ ] Criação de faturas
+- [ ] Controle de pagamentos
+- [ ] Relatórios financeiros
+
+### Tickets e Suporte
+- [X] Estrutura das tabelas de tickets e mensagens
+- [X] RLS para controle de acesso
+- [ ] Listagem de tickets
+- [ ] Formulário de criação de tickets
+- [ ] Chat interno para tickets
+- [ ] Sistema de status e prioridade
+
+### Arquivos
+- [X] Estrutura da tabela de arquivos
+- [X] RLS para controle de acesso
+- [ ] Integração com Google Drive API
+- [ ] Upload e visualização de arquivos
+- [ ] Organização por cliente/projeto
+
+### Calendário
+- [X] Estrutura da tabela de eventos
+- [X] RLS para controle de acesso
+- [ ] Visualização de calendário
+- [ ] Criação de eventos
+- [ ] Notificações de eventos
+
+### Relatórios
+- [ ] Dashboard com métricas gerais
+- [ ] Relatório de clientes
+- [ ] Relatório de projetos
+- [ ] Relatório financeiro
+- [ ] Exportação para PDF/Excel
+
+## Integrações
+- [ ] Google Drive API para arquivos
+- [ ] Resend para envio de emails
+- [ ] WhatsApp API para notificações
+- [ ] Integração com VPS Contabo
+
+## Implantação
+- [ ] Migração dos dados do Firebase para Supabase
+- [ ] Configuração do ambiente de produção
+- [ ] Documentação do sistema
+- [ ] Treinamento para usuários
+
+## Status do Projeto
+- Data de início: 21/05/2025
+- Progresso: 20%
+- Próximos passos: Implementação dos módulos de clientes e leads
