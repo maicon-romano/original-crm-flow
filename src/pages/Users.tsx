@@ -59,8 +59,6 @@ const UsersPage = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  console.log("UsersPage - Current user:", user);
-
   // Check if current user is admin
   useEffect(() => {
     const isAdmin = user?.role === "admin";
@@ -94,6 +92,7 @@ const UsersPage = () => {
         console.log("Fetching users from Supabase...");
         sonnerToast.info("Carregando usuários...");
         
+        // Use the new approach that doesn't trigger recursion
         const { data, error } = await supabase
           .from("users")
           .select("*")
