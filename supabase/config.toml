@@ -29,5 +29,11 @@ enabled = false
 [functions.create-drive-folders]
 verify_jwt = true
 
+[functions.create-client-user]
+verify_jwt = true
+
+[functions.send-invitation]
+verify_jwt = true
+
 [realtime]
 enabled = true

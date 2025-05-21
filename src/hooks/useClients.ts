@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -93,28 +94,47 @@ export const useClients = () => {
       // Add the new client to the clients array
       setClients(prevClients => [typedClient, ...prevClients]);
 
-      // Create Drive folders for the new client if they have a company_name
-      if (typedClient.company_name) {
-        try {
+      // Create Drive folders for the new client
+      let driveFolderCreated = false;
+      let driveErrorMsg = "";
+      
+      try {
+        // Determinar o nome correto da pasta com base no tipo de pessoa
+        const folderName = typedClient.person_type === "fisica" 
+          ? typedClient.contact_name 
+          : typedClient.company_name;
+        
+        if (folderName) {
+          console.log(`Attempting to create Drive folders for client: ${folderName}`);
+          
           const { data: driveData, error: driveError } = await supabase.functions.invoke('create-drive-folders', {
             body: { client: typedClient }
           });
           
           if (driveError) {
             console.error("Error creating Drive folders:", driveError);
-            toast.error("Erro ao criar pastas no Google Drive");
+            driveErrorMsg = driveError.message || "Erro desconhecido ao criar pastas";
           } else if (driveData?.folder_id) {
             console.log("Drive folders created successfully:", driveData);
-            toast.success("Pastas do Google Drive criadas com sucesso!");
+            driveFolderCreated = true;
             
             // Update the client with the Drive folder ID
-            updateClient(typedClient.id, { drive_folder_id: driveData.folder_id });
+            await updateClient(typedClient.id, { drive_folder_id: driveData.folder_id });
           }
-        } catch (driveErr) {
-          console.error("Exception creating Drive folders:", driveErr);
-          toast.error("Erro ao criar pastas no Google Drive. O cliente foi salvo, mas sem as pastas.");
-          // Don't throw here - we want to keep the client even if Drive folder creation fails
+        } else {
+          driveErrorMsg = "Nome para criação da pasta não fornecido";
+          console.error("Missing folder name for Drive folder creation");
         }
+      } catch (driveErr: any) {
+        console.error("Exception creating Drive folders:", driveErr);
+        driveErrorMsg = driveErr.message || "Erro ao criar pastas no Google Drive";
+      }
+      
+      // Show appropriate toast based on Drive folder creation result
+      if (driveFolderCreated) {
+        toast.success("Pastas do Google Drive criadas com sucesso!");
+      } else {
+        toast.error(`Erro ao criar pastas no Google Drive: ${driveErrorMsg}. O cliente foi salvo, mas sem as pastas.`);
       }
 
       // Send email invitation if requested
