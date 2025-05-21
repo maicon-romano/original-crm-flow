@@ -8,13 +8,11 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle, Loader2 } from "lucide-react"; 
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isCreatingAdmin, setIsCreatingAdmin] = useState(false);
   const [error, setError] = useState("");
   const { login, isAuthenticated } = useSupabaseAuth();
   const navigate = useNavigate();
@@ -41,56 +39,6 @@ const Login = () => {
       setError(err.message || "Erro ao fazer login. Verifique suas credenciais.");
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  const createAdminUser = async () => {
-    const adminEmail = "originaldigitaloficial@gmail.com";
-    const adminPassword = "Original.280712";
-    
-    try {
-      setIsCreatingAdmin(true);
-      setError("");
-      
-      // Create the admin user
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email: adminEmail,
-        password: adminPassword,
-        email_confirm: true,
-        user_metadata: {
-          name: "Admin Original Digital",
-          role: "admin"
-        }
-      });
-      
-      if (authError) {
-        throw authError;
-      }
-      
-      // If the user was created successfully, automatically fill the login form
-      setEmail(adminEmail);
-      setPassword(adminPassword);
-      
-      toast.success("Administrador criado com sucesso!", {
-        description: "Agora você pode fazer login com as credenciais de administrador."
-      });
-    } catch (err: any) {
-      console.error("Error creating admin:", err);
-      
-      if (err.message?.includes("already taken")) {
-        toast.info("Este administrador já existe!", {
-          description: "Você pode fazer login com as credenciais de administrador."
-        });
-        setEmail(adminEmail);
-        setPassword(adminPassword);
-      } else {
-        setError(err.message || "Erro ao criar administrador.");
-        toast.error("Erro ao criar administrador", {
-          description: err.message || "Ocorreu um erro ao criar o usuário administrador."
-        });
-      }
-    } finally {
-      setIsCreatingAdmin(false);
     }
   };
 
@@ -158,26 +106,6 @@ const Login = () => {
                 "Entrar"
               )}
             </Button>
-
-            <div className="mt-4 pt-4 border-t text-center">
-              <p className="text-sm text-gray-500 mb-2">Primeira vez usando o sistema?</p>
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full"
-                disabled={isCreatingAdmin}
-                onClick={createAdminUser}
-              >
-                {isCreatingAdmin ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Criando administrador...
-                  </>
-                ) : (
-                  "Criar administrador principal"
-                )}
-              </Button>
-            </div>
           </form>
         </div>
         

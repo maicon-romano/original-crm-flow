@@ -35,6 +35,15 @@ interface SupabaseAuthContextType {
 
 const SupabaseAuthContext = createContext<SupabaseAuthContextType | undefined>(undefined);
 
+// Check if a user is a reserved admin user
+const isReservedAdmin = (email: string): boolean => {
+  const adminEmails = [
+    "originaldigitaloficial@gmail.com",
+    "maicon.romano@originaldigital.com.br"
+  ];
+  return adminEmails.includes(email.toLowerCase());
+};
+
 export const SupabaseAuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -94,31 +103,40 @@ export const SupabaseAuthProvider = ({ children }: { children: ReactNode }) => {
       if (error) {
         console.error("Error fetching user profile:", error);
         
-        // Special case for the first admin user (might not exist in the db yet)
-        if (currentSession?.user.email === "maicon.romano@originaldigital.com.br") {
+        // Handle reserved admin users specially
+        if (currentSession?.user.email && isReservedAdmin(currentSession.user.email)) {
           console.log("Creating admin profile for:", currentSession.user.email);
           
+          const adminName = currentSession.user.email === "originaldigitaloficial@gmail.com" 
+            ? "Admin Original Digital" 
+            : "Maicon Romano";
+          
+          const adminPosition = currentSession.user.email === "originaldigitaloficial@gmail.com"
+            ? "Administrador Principal"
+            : "CGO - Diretor Executivo de Crescimento";
+            
           const adminUser: AuthUser = {
             id: userId,
-            name: "Maicon Romano",
+            name: adminName,
             email: currentSession.user.email,
             role: "admin",
+            position: adminPosition,
+            active: true,
+            needs_password_reset: false
           };
           
           // Try to create the admin user
           const { error: createError } = await supabase
             .from("users")
-            .insert([
-              { 
-                id: userId,
-                name: "Maicon Romano",
-                email: currentSession.user.email,
-                role: "admin",
-                position: "CGO - Diretor Executivo de Crescimento",
-                active: true,
-                needs_password_reset: false
-              }
-            ]);
+            .insert([{ 
+              id: userId,
+              name: adminName,
+              email: currentSession.user.email,
+              role: "admin",
+              position: adminPosition,
+              active: true,
+              needs_password_reset: false
+            }]);
             
           if (createError) {
             console.error("Error creating admin user:", createError);
