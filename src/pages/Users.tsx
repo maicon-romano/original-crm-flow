@@ -108,7 +108,7 @@ const UsersPage = () => {
           setUsers(directData || []);
         } else {
           console.log("Users data from RPC:", data);
-          setUsers(data || []);
+          setUsers(data as User[]);
         }
         
         sonnerToast.success(`${data?.length || 0} usuários carregados!`);
@@ -170,7 +170,7 @@ const UsersPage = () => {
           if (directError) throw directError;
           setUsers(directData || []);
         } else {
-          setUsers(data || []);
+          setUsers(data as User[]);
         }
         
         sonnerToast.success("Lista de usuários atualizada!");
