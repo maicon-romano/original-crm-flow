@@ -1,9 +1,8 @@
 
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
-import { db } from "@/lib/firebase";
-import { collection, getDocs, query, orderBy } from "firebase/firestore";
+import { useSupabaseAuth } from "@/contexts/SupabaseAuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { toast as sonnerToast } from "sonner";
 import { 
@@ -45,10 +44,10 @@ interface User {
   cargo?: string;
   position?: string;
   role: string;
-  userType?: string;
   active: boolean;
-  createdAt: number;
-  updatedAt: number;
+  created_at?: string;
+  updated_at?: string;
+  last_login?: string;
 }
 
 const UsersPage = () => {
@@ -56,7 +55,7 @@ const UsersPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
-  const { user } = useAuth();
+  const { user } = useSupabaseAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -64,10 +63,9 @@ const UsersPage = () => {
 
   // Check if current user is admin
   useEffect(() => {
-    const isAdmin = user?.role === "admin" || user?.userType === "admin";
+    const isAdmin = user?.role === "admin";
     console.log("UsersPage - Checking admin permission:", { 
       userRole: user?.role, 
-      userType: user?.userType, 
       isAdmin 
     });
     
@@ -81,9 +79,9 @@ const UsersPage = () => {
     }
   }, [user, navigate, toast]);
 
-  // Fetch users from Firestore - try both "users" and "usuarios" collections
+  // Fetch users from Supabase
   useEffect(() => {
-    const isAdmin = user?.role === "admin" || user?.userType === "admin";
+    const isAdmin = user?.role === "admin";
     
     const fetchUsers = async () => {
       if (!isAdmin) {
@@ -93,52 +91,21 @@ const UsersPage = () => {
       
       try {
         setIsLoading(true);
-        console.log("Fetching users from Firestore...");
+        console.log("Fetching users from Supabase...");
         sonnerToast.info("Carregando usuários...");
         
-        // Try usuarios collection first with improved error handling
-        try {
-          const usuariosRef = collection(db, "usuarios");
-          const usuariosQuery = query(usuariosRef, orderBy("createdAt", "desc"));
-          const usuariosSnapshot = await getDocs(usuariosQuery);
-          
-          const usuariosData: User[] = [];
-          usuariosSnapshot.forEach((doc) => {
-            usuariosData.push({ ...doc.data(), id: doc.id } as User);
-          });
-          
-          console.log("Usuarios collection result:", usuariosData.length);
-          
-          if (usuariosData.length > 0) {
-            setUsers(usuariosData);
-            sonnerToast.success(`${usuariosData.length} usuários carregados!`);
-            setIsLoading(false);
-            return;
-          }
-        } catch (error) {
-          console.error("Error fetching from usuarios collection:", error);
-        }
+        const { data, error } = await supabase
+          .from("users")
+          .select("*")
+          .order("created_at", { ascending: false });
         
-        // If no users in usuarios or error occurred, try users collection
-        try {
-          const usersRef = collection(db, "users");
-          const usersQuery = query(usersRef, orderBy("createdAt", "desc"));
-          const querySnapshot = await getDocs(usersQuery);
-          
-          const usersData: User[] = [];
-          querySnapshot.forEach((doc) => {
-            usersData.push({ ...doc.data(), id: doc.id } as User);
-          });
-          
-          console.log("Users collection result:", usersData.length);
-          setUsers(usersData);
-          sonnerToast.success(`${usersData.length} usuários carregados!`);
-        } catch (error) {
-          console.error("Error fetching from users collection:", error);
-          sonnerToast.error("Erro ao carregar usuários do banco de dados.");
-        }
-      } catch (error) {
-        console.error("Error in user fetching process:", error);
+        if (error) throw error;
+        
+        console.log("Users data:", data);
+        setUsers(data || []);
+        sonnerToast.success(`${data?.length || 0} usuários carregados!`);
+      } catch (error: any) {
+        console.error("Error fetching users:", error);
         sonnerToast.error("Erro ao carregar usuários. Verifique suas permissões.");
         toast({
           title: "Erro ao carregar usuários",
@@ -167,7 +134,7 @@ const UsersPage = () => {
   );
 
   // Format date from timestamp
-  const formatDate = (timestamp: number) => {
+  const formatDate = (timestamp?: string) => {
     if (!timestamp) return "";
     return new Date(timestamp).toLocaleDateString('pt-BR');
   };
@@ -179,41 +146,16 @@ const UsersPage = () => {
     const fetchUsers = async () => {
       try {
         sonnerToast.info("Atualizando lista de usuários...");
-        // Try first from usuarios collection
-        const usuariosRef = collection(db, "usuarios");
-        const usuariosQuery = query(usuariosRef, orderBy("createdAt", "desc"));
         
-        try {
-          const usuariosSnapshot = await getDocs(usuariosQuery);
-          const usuariosData: User[] = [];
-          
-          usuariosSnapshot.forEach((doc) => {
-            usuariosData.push({ ...doc.data(), id: doc.id } as User);
-          });
-          
-          console.log("Usuarios refetched:", usuariosData.length);
-          
-          if (usuariosData.length > 0) {
-            setUsers(usuariosData);
-            sonnerToast.success("Lista de usuários atualizada!");
-            return;
-          }
-        } catch (error) {
-          console.error("Error refetching from usuarios collection:", error);
-        }
+        const { data, error } = await supabase
+          .from("users")
+          .select("*")
+          .order("created_at", { ascending: false });
         
-        // If no users in usuarios, try users collection
-        const usersRef = collection(db, "users");
-        const usersQuery = query(usersRef, orderBy("createdAt", "desc"));
+        if (error) throw error;
         
-        const querySnapshot = await getDocs(usersQuery);
-        
-        const usersData: User[] = [];
-        querySnapshot.forEach((doc) => {
-          usersData.push({ ...doc.data(), id: doc.id } as User);
-        });
-        
-        setUsers(usersData);
+        console.log("Users refetched:", data?.length);
+        setUsers(data || []);
         sonnerToast.success("Lista de usuários atualizada!");
       } catch (error) {
         console.error("Error refetching users:", error);
@@ -225,7 +167,7 @@ const UsersPage = () => {
   };
 
   // Check if current user is admin
-  const isAdmin = user?.role === "admin" || user?.userType === "admin";
+  const isAdmin = user?.role === "admin";
 
   // If user is not admin, show loading or redirect
   if (!isAdmin) {
@@ -304,13 +246,13 @@ const UsersPage = () => {
                     <TableCell>{userData.cargo || userData.position || "-"}</TableCell>
                     <TableCell>
                       <Badge
-                        variant={(userData.role === "admin" || userData.userType === "admin") ? "default" : "outline"}
-                        className={(userData.role === "admin" || userData.userType === "admin") ? "bg-blue-500" : ""}
+                        variant={(userData.role === "admin") ? "default" : "outline"}
+                        className={(userData.role === "admin") ? "bg-blue-500" : ""}
                       >
-                        {(userData.role === "admin" || userData.userType === "admin") ? "Administrador" : "Funcionário"}
+                        {(userData.role === "admin") ? "Administrador" : "Funcionário"}
                       </Badge>
                     </TableCell>
-                    <TableCell>{formatDate(userData.createdAt)}</TableCell>
+                    <TableCell>{formatDate(userData.created_at)}</TableCell>
                     <TableCell>
                       <Badge
                         variant={userData.active ? "default" : "secondary"}
