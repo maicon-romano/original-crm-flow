@@ -3,13 +3,16 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { Resend } from "npm:resend@2.0.0";
 
+// Obter variáveis de ambiente
 const resendApiKey = Deno.env.get("RESEND_API_KEY") || "";
 const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
+// Inicializar clientes
 const resend = new Resend(resendApiKey);
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+// Configurar cabeçalhos CORS
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -29,8 +32,9 @@ interface InviteRequest {
 
 serve(async (req: Request) => {
   console.log("Received request:", req.method);
+  console.log("RESEND API Key available:", !!resendApiKey);
   
-  // Handle CORS preflight requests
+  // Tratar requisições de preflight CORS
   if (req.method === "OPTIONS") {
     console.log("Handling OPTIONS/preflight request");
     return new Response(null, { 
@@ -53,13 +57,13 @@ serve(async (req: Request) => {
     const { email, name, role, position, invitedBy }: InviteRequest = await req.json();
     console.log(`Processing invitation for ${email}`);
 
-    // Generate a temporary password
+    // Gerar senha temporária
     const tempPassword = Array(10)
       .fill("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz")
       .map(x => x[Math.floor(Math.random() * x.length)])
       .join("");
 
-    // Create the user in Supabase Auth
+    // Criar o usuário no Supabase Auth
     const { data: userData, error: userError } = await supabase.auth.admin.createUser({
       email,
       password: tempPassword,
@@ -83,7 +87,7 @@ serve(async (req: Request) => {
       );
     }
 
-    // Update additional user info in the public.users table
+    // Atualizar informações adicionais na tabela public.users
     const { error: updateError } = await supabase
       .from("users")
       .update({
@@ -97,7 +101,7 @@ serve(async (req: Request) => {
       console.error("Error updating user data:", updateError);
     }
 
-    // Send invitation email using Resend
+    // Enviar email de convite usando Resend
     const { data: emailData, error: emailError } = await resend.emails.send({
       from: "Original Digital <contato@originaldigital.com.br>",
       to: email,
