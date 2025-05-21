@@ -23,9 +23,6 @@ enabled = true
 [auth]
 enabled = true
 
-[cdn]
-enabled = false
-
 [functions.create-drive-folders]
 verify_jwt = true
 
