@@ -12,48 +12,135 @@ export type Database = {
       clients: {
         Row: {
           address: string | null
+          address_complement: string | null
+          address_number: string | null
+          city: string | null
+          client_source: string | null
           company_name: string
           contact_name: string
+          contract_end: string | null
+          contract_start: string | null
+          contract_value: number | null
+          cpf: string | null
           created_at: string
           drive_folder_id: string | null
           email: string
+          fantasy_name: string | null
           id: string
+          instagram: string | null
+          legal_name: string | null
+          municipal_registration: string | null
+          neighborhood: string | null
+          notes: string | null
+          other_social_media: Json | null
+          paid_traffic: boolean | null
+          person_type: string | null
           phone: string | null
+          plan: string | null
+          responsible_name: string | null
+          responsible_position: string | null
+          rg: string | null
+          send_email_invite: boolean | null
+          send_whatsapp_invite: boolean | null
+          social_media: boolean | null
+          state: string | null
+          state_registration: string | null
           status: string
           tax_id: string | null
           updated_at: string
           user_id: string | null
           website: string | null
+          website_development: boolean | null
+          whatsapp_link: string | null
+          zip_code: string | null
         }
         Insert: {
           address?: string | null
+          address_complement?: string | null
+          address_number?: string | null
+          city?: string | null
+          client_source?: string | null
           company_name: string
           contact_name: string
+          contract_end?: string | null
+          contract_start?: string | null
+          contract_value?: number | null
+          cpf?: string | null
           created_at?: string
           drive_folder_id?: string | null
           email: string
+          fantasy_name?: string | null
           id?: string
+          instagram?: string | null
+          legal_name?: string | null
+          municipal_registration?: string | null
+          neighborhood?: string | null
+          notes?: string | null
+          other_social_media?: Json | null
+          paid_traffic?: boolean | null
+          person_type?: string | null
           phone?: string | null
+          plan?: string | null
+          responsible_name?: string | null
+          responsible_position?: string | null
+          rg?: string | null
+          send_email_invite?: boolean | null
+          send_whatsapp_invite?: boolean | null
+          social_media?: boolean | null
+          state?: string | null
+          state_registration?: string | null
           status?: string
           tax_id?: string | null
           updated_at?: string
           user_id?: string | null
           website?: string | null
+          website_development?: boolean | null
+          whatsapp_link?: string | null
+          zip_code?: string | null
         }
         Update: {
           address?: string | null
+          address_complement?: string | null
+          address_number?: string | null
+          city?: string | null
+          client_source?: string | null
           company_name?: string
           contact_name?: string
+          contract_end?: string | null
+          contract_start?: string | null
+          contract_value?: number | null
+          cpf?: string | null
           created_at?: string
           drive_folder_id?: string | null
           email?: string
+          fantasy_name?: string | null
           id?: string
+          instagram?: string | null
+          legal_name?: string | null
+          municipal_registration?: string | null
+          neighborhood?: string | null
+          notes?: string | null
+          other_social_media?: Json | null
+          paid_traffic?: boolean | null
+          person_type?: string | null
           phone?: string | null
+          plan?: string | null
+          responsible_name?: string | null
+          responsible_position?: string | null
+          rg?: string | null
+          send_email_invite?: boolean | null
+          send_whatsapp_invite?: boolean | null
+          social_media?: boolean | null
+          state?: string | null
+          state_registration?: string | null
           status?: string
           tax_id?: string | null
           updated_at?: string
           user_id?: string | null
           website?: string | null
+          website_development?: boolean | null
+          whatsapp_link?: string | null
+          zip_code?: string | null
         }
         Relationships: [
           {

@@ -26,7 +26,16 @@ Deno.serve(async (req) => {
     console.log("Using application URL for redirects:", applicationUrl);
     
     // Get request body
-    const { email, name, company, password } = await req.json();
+    const { 
+      email, 
+      name, 
+      company, 
+      password, 
+      role, 
+      position, 
+      phone,
+      send_whatsapp = false  
+    } = await req.json();
     
     if (!email) {
       return new Response(
@@ -40,17 +49,61 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') as string;
     const supabase = createClient(supabaseUrl, supabaseKey);
     
-    // Get user data to retrieve confirmation token
-    const { data: { users }, error: usersError } = await supabase.auth.admin.listUsers();
+    // First check if user already exists
+    const { data: existingUsers, error: existingError } = await supabase.auth.admin.listUsers({
+      filters: {
+        email: email
+      }
+    });
     
-    if (usersError) {
-      throw usersError;
-    }
+    let userId;
     
-    const user = users.find(u => u.email === email);
-    
-    if (!user) {
-      throw new Error(`Usuário não encontrado: ${email}`);
+    // If user doesn't exist, create them
+    if (!existingUsers?.users.length) {
+      // Create auth user
+      const { data: userData, error: createError } = await supabase.auth.admin.createUser({
+        email: email,
+        password: password || Math.random().toString(36).slice(-8),
+        email_confirm: true, // Auto-confirm email
+        user_metadata: {
+          name: name,
+          company: company,
+        }
+      });
+      
+      if (createError) {
+        throw createError;
+      }
+      
+      userId = userData.user.id;
+      
+      // Create user profile
+      try {
+        const { error: profileError } = await supabase
+          .from('users')
+          .insert({
+            id: userId,
+            email: email,
+            name: name,
+            role: role || 'client',
+            position: position,
+            phone: phone,
+            active: true,
+            needs_password_reset: true
+          });
+          
+        if (profileError) {
+          console.error("Error creating user profile:", profileError);
+          throw profileError;
+        }
+      } catch (err) {
+        console.error("Error inserting user profile:", err);
+        throw err;
+      }
+    } else {
+      // User already exists
+      userId = existingUsers.users[0].id;
+      console.log("User already exists:", userId);
     }
     
     // Get email API key
@@ -64,24 +117,6 @@ Deno.serve(async (req) => {
     const resetLink = `${applicationUrl}/reset-password`;
     console.log("Generated reset link:", resetLink);
     
-    // Update user data with temporary password if provided
-    if (password) {
-      try {
-        const { error: updateError } = await supabase
-          .from('users')
-          .update({
-            needs_password_reset: true
-          })
-          .eq('email', email);
-          
-        if (updateError) {
-          console.error("Error updating user profile:", updateError);
-        }
-      } catch (err) {
-        console.error("Error inserting user profile:", err);
-      }
-    }
-
     // Send email
     const client = new SmtpClient();
 
@@ -181,6 +216,23 @@ Deno.serve(async (req) => {
     await client.close();
     
     console.log("Email sent successfully:", info);
+    
+    // If WhatsApp message is requested, you could integrate with API Evolution or other WhatsApp API here
+    if (send_whatsapp && phone) {
+      // Implement WhatsApp messaging integration here
+      try {
+        const apiKey = Deno.env.get('API_EVOLUTION_INSTANCE');
+        if (apiKey) {
+          console.log("Would send WhatsApp message to:", phone);
+          // Implement actual WhatsApp message sending
+        } else {
+          console.log("WhatsApp API key not configured, skipping WhatsApp message");
+        }
+      } catch (whatsappError) {
+        console.error("Error sending WhatsApp message:", whatsappError);
+        // Log but don't throw, so email success is still returned
+      }
+    }
 
     return new Response(
       JSON.stringify({ success: true }),

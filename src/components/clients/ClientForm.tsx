@@ -19,27 +19,72 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 
 // Schema for form validation
 const clientFormSchema = z.object({
-  company_name: z.string().min(2, { message: "Nome da empresa é obrigatório" }),
+  // Person type
+  person_type: z.enum(["juridica", "fisica"]),
+  
+  // Juridical person fields
+  legal_name: z.string().optional().refine(val => val && val.length >= 2 || false, 
+    { message: "Razão Social é obrigatória para pessoa jurídica" }),
+  fantasy_name: z.string().optional().refine(val => val && val.length >= 2 || false, 
+    { message: "Nome Fantasia é obrigatória para pessoa jurídica" }),
+  company_name: z.string().optional(),
+  tax_id: z.string().optional(),
+  state_registration: z.string().optional(),
+  municipal_registration: z.string().optional(),
+  
+  // Physical person fields
   contact_name: z.string().min(2, { message: "Nome do contato é obrigatório" }),
+  cpf: z.string().optional(),
+  rg: z.string().optional(),
+  
+  // Contact information
   email: z.string().email({ message: "E-mail inválido" }),
   phone: z.string().optional(),
+  responsible_name: z.string().optional(),
+  responsible_position: z.string().optional(),
+  
+  // Address
+  zip_code: z.string().optional(),
   address: z.string().optional(),
+  address_number: z.string().optional(),
+  address_complement: z.string().optional(),
+  neighborhood: z.string().optional(),
   city: z.string().optional(),
   state: z.string().optional(),
-  tax_id: z.string().optional(),
+  
+  // Internal organization
+  contract_value: z.coerce.number().optional(),
+  plan: z.string().optional(),
   status: z.string().default("active"),
+  client_source: z.string().optional(),
+  
+  // Social media and links
   instagram: z.string().optional(),
   website: z.string().optional(),
+  whatsapp_link: z.string().optional(),
+  other_social_media: z.record(z.string()).optional(),
+  
+  // Services flags
   social_media: z.boolean().default(false),
   paid_traffic: z.boolean().default(false),
   website_development: z.boolean().default(false),
-  contract_value: z.coerce.number().optional(),
+  
+  // Contract
   contract_start: z.date().optional(),
   contract_end: z.date().optional(),
+  
+  // CRM access
+  send_email_invite: z.boolean().default(false),
+  send_whatsapp_invite: z.boolean().default(false),
+  
+  // Notes
+  notes: z.string().optional(),
 });
 
 type ClientFormValues = z.infer<typeof clientFormSchema>;
@@ -54,23 +99,43 @@ export function ClientForm({ onComplete, client }: ClientFormProps) {
   const isEditing = !!client;
   
   const defaultValues: Partial<ClientFormValues> = {
+    person_type: "juridica",
+    legal_name: "",
+    fantasy_name: "",
     company_name: "",
     contact_name: "",
     email: "",
     phone: "",
     address: "",
+    address_number: "",
+    address_complement: "",
+    neighborhood: "",
     city: "",
     state: "",
+    zip_code: "",
     tax_id: "",
+    cpf: "",
+    rg: "",
+    state_registration: "",
+    municipal_registration: "",
+    responsible_name: "",
+    responsible_position: "",
     status: "active",
+    client_source: "indicacao",
     instagram: "",
     website: "",
+    whatsapp_link: "",
+    other_social_media: {},
     social_media: false,
     paid_traffic: false,
     website_development: false,
     contract_value: undefined,
+    plan: "",
+    notes: "",
     contract_start: undefined,
     contract_end: undefined,
+    send_email_invite: false,
+    send_whatsapp_invite: false,
   };
   
   const form = useForm<ClientFormValues>({
@@ -83,6 +148,14 @@ export function ClientForm({ onComplete, client }: ClientFormProps) {
     } : defaultValues,
   });
   
+  // Watch the person_type field to apply conditional validation
+  const personType = form.watch("person_type");
+  
+  // Effect to handle person_type change and update validations
+  useEffect(() => {
+    form.trigger();
+  }, [personType, form]);
+  
   // Handle client data submission
   const onSubmit = async (data: ClientFormValues) => {
     setIsSubmitting(true);
@@ -93,21 +166,39 @@ export function ClientForm({ onComplete, client }: ClientFormProps) {
         const { error } = await supabase
           .from('clients')
           .update({
-            company_name: data.company_name,
+            person_type: data.person_type,
+            legal_name: data.legal_name,
+            fantasy_name: data.fantasy_name,
+            company_name: data.company_name || data.fantasy_name,
             contact_name: data.contact_name,
             email: data.email,
             phone: data.phone,
+            tax_id: data.tax_id,
+            cpf: data.cpf,
+            rg: data.rg,
+            state_registration: data.state_registration,
+            municipal_registration: data.municipal_registration,
+            responsible_name: data.responsible_name,
+            responsible_position: data.responsible_position,
             address: data.address,
+            address_number: data.address_number,
+            address_complement: data.address_complement,
+            neighborhood: data.neighborhood,
             city: data.city,
             state: data.state,
-            tax_id: data.tax_id,
+            zip_code: data.zip_code,
             status: data.status,
+            client_source: data.client_source,
             instagram: data.instagram,
             website: data.website,
+            whatsapp_link: data.whatsapp_link,
+            other_social_media: data.other_social_media,
             social_media: data.social_media,
             paid_traffic: data.paid_traffic,
             website_development: data.website_development,
             contract_value: data.contract_value,
+            plan: data.plan,
+            notes: data.notes,
             contract_start: data.contract_start?.toISOString(),
             contract_end: data.contract_end?.toISOString(),
             updated_at: new Date().toISOString(),
@@ -123,21 +214,39 @@ export function ClientForm({ onComplete, client }: ClientFormProps) {
         const { data: clientData, error } = await supabase
           .from('clients')
           .insert({
-            company_name: data.company_name,
+            person_type: data.person_type,
+            legal_name: data.legal_name,
+            fantasy_name: data.fantasy_name, 
+            company_name: data.company_name || data.fantasy_name,
             contact_name: data.contact_name,
             email: data.email,
             phone: data.phone,
+            tax_id: data.tax_id,
+            cpf: data.cpf,
+            rg: data.rg,
+            state_registration: data.state_registration,
+            municipal_registration: data.municipal_registration,
+            responsible_name: data.responsible_name,
+            responsible_position: data.responsible_position,
             address: data.address,
+            address_number: data.address_number,
+            address_complement: data.address_complement,
+            neighborhood: data.neighborhood,
             city: data.city,
             state: data.state,
-            tax_id: data.tax_id,
+            zip_code: data.zip_code,
             status: data.status,
+            client_source: data.client_source,
             instagram: data.instagram,
             website: data.website,
+            whatsapp_link: data.whatsapp_link,
+            other_social_media: data.other_social_media,
             social_media: data.social_media,
             paid_traffic: data.paid_traffic,
             website_development: data.website_development,
             contract_value: data.contract_value,
+            plan: data.plan,
+            notes: data.notes,
             contract_start: data.contract_start?.toISOString(),
             contract_end: data.contract_end?.toISOString(),
             created_at: new Date().toISOString(),
@@ -162,6 +271,36 @@ export function ClientForm({ onComplete, client }: ClientFormProps) {
               console.log("Drive folders created:", createFoldersResponse.data);
               toast.success("Cliente criado com sucesso e pastas criadas no Google Drive!");
             }
+            
+            // If invite checkboxes are selected, send invites
+            if (data.send_email_invite || data.send_whatsapp_invite) {
+              // Generate a temporary password
+              const tempPassword = Math.random().toString(36).slice(-8);
+              
+              try {
+                const inviteResponse = await supabase.functions.invoke("send-invitation", {
+                  body: {
+                    email: data.email,
+                    name: data.person_type === "juridica" ? data.fantasy_name : data.contact_name,
+                    role: "client",
+                    position: data.responsible_position,
+                    phone: data.phone,
+                    password: tempPassword,
+                    send_whatsapp: data.send_whatsapp_invite,
+                    company: data.person_type === "juridica" ? data.legal_name : undefined
+                  }
+                });
+                
+                if (inviteResponse.error) {
+                  throw new Error(inviteResponse.error);
+                }
+                
+                toast.success("Convite enviado para o cliente");
+              } catch (inviteError) {
+                console.error("Error sending invitation:", inviteError);
+                toast.error("Erro ao enviar convite para o cliente");
+              }
+            }
           } catch (folderError) {
             console.error("Exception creating Drive folders:", folderError);
             toast.error("Cliente criado, mas ocorreu um erro ao criar as pastas no Google Drive.");
@@ -182,111 +321,185 @@ export function ClientForm({ onComplete, client }: ClientFormProps) {
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <Tabs defaultValue="basic">
-          <TabsList className="mb-4">
+          <TabsList className="mb-4 flex flex-wrap">
             <TabsTrigger value="basic">Informações Básicas</TabsTrigger>
+            <TabsTrigger value="contact">Contato</TabsTrigger>
+            <TabsTrigger value="address">Endereço</TabsTrigger>
             <TabsTrigger value="services">Serviços</TabsTrigger>
             <TabsTrigger value="contract">Contrato</TabsTrigger>
+            <TabsTrigger value="social">Redes Sociais</TabsTrigger>
+            <TabsTrigger value="crm">Acesso CRM</TabsTrigger>
+            <TabsTrigger value="notes">Observações</TabsTrigger>
           </TabsList>
           
           <TabsContent value="basic" className="space-y-4">
+            <FormField
+              control={form.control}
+              name="person_type"
+              render={({ field }) => (
+                <FormItem className="mb-4">
+                  <FormLabel>Tipo de Pessoa</FormLabel>
+                  <FormControl>
+                    <RadioGroup 
+                      onValueChange={field.onChange} 
+                      defaultValue={field.value}
+                      className="flex flex-col space-y-1"
+                    >
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="juridica" id="pessoa-juridica" />
+                        <label htmlFor="pessoa-juridica" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                          Pessoa Jurídica (CNPJ)
+                        </label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="fisica" id="pessoa-fisica" />
+                        <label htmlFor="pessoa-fisica" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                          Pessoa Física (CPF)
+                        </label>
+                      </div>
+                    </RadioGroup>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="company_name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nome da Empresa</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Nome da empresa" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {/* Fields for Legal Entity (Pessoa Jurídica) */}
+              {personType === "juridica" && (
+                <>
+                  <FormField
+                    control={form.control}
+                    name="legal_name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Razão Social *</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Razão Social da empresa" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="fantasy_name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Nome Fantasia *</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Nome Fantasia da empresa" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="tax_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>CNPJ *</FormLabel>
+                        <FormControl>
+                          <Input placeholder="00.000.000/0000-00" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="state_registration"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Inscrição Estadual</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Inscrição Estadual" {...field} value={field.value || ''} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="municipal_registration"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Inscrição Municipal</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Inscrição Municipal" {...field} value={field.value || ''} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </>
+              )}
               
-              <FormField
-                control={form.control}
-                name="contact_name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nome do Contato</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Nome do contato principal" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>E-mail</FormLabel>
-                    <FormControl>
-                      <Input type="email" placeholder="email@exemplo.com" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="phone"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Telefone</FormLabel>
-                    <FormControl>
-                      <Input placeholder="(00) 00000-0000" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="instagram"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Instagram</FormLabel>
-                    <FormControl>
-                      <Input placeholder="@perfil" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="website"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Website</FormLabel>
-                    <FormControl>
-                      <Input placeholder="https://exemplo.com" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="tax_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>CNPJ</FormLabel>
-                    <FormControl>
-                      <Input placeholder="00.000.000/0000-00" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {/* Fields for Physical Person (Pessoa Física) */}
+              {personType === "fisica" && (
+                <>
+                  <FormField
+                    control={form.control}
+                    name="contact_name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Nome Completo *</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Nome completo" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="cpf"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>CPF *</FormLabel>
+                        <FormControl>
+                          <Input placeholder="000.000.000-00" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="rg"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>RG</FormLabel>
+                        <FormControl>
+                          <Input placeholder="RG" {...field} value={field.value || ''} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="company_name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Nome da Empresa (se aplicável)</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Nome da empresa" {...field} value={field.value || ''} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </>
+              )}
               
               <FormField
                 control={form.control}
@@ -302,7 +515,8 @@ export function ClientForm({ onComplete, client }: ClientFormProps) {
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="active">Ativo</SelectItem>
-                        <SelectItem value="inactive">Inativo</SelectItem>
+                        <SelectItem value="in_progress">Em Andamento</SelectItem>
+                        <SelectItem value="inactive">Cancelado</SelectItem>
                         <SelectItem value="prospect">Prospect</SelectItem>
                       </SelectContent>
                     </Select>
@@ -310,19 +524,159 @@ export function ClientForm({ onComplete, client }: ClientFormProps) {
                   </FormItem>
                 )}
               />
+              
+              <FormField
+                control={form.control}
+                name="client_source"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Origem do Cliente</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione a origem" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="indicacao">Indicação</SelectItem>
+                        <SelectItem value="trafego">Tráfego</SelectItem>
+                        <SelectItem value="organico">Orgânico</SelectItem>
+                        <SelectItem value="prospeccao">Prospecção</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
-            
-            <Separator />
-            
+          </TabsContent>
+          
+          <TabsContent value="contact" className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>E-mail de acesso ao CRM *</FormLabel>
+                    <FormControl>
+                      <Input type="email" placeholder="email@exemplo.com" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="phone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Telefone / WhatsApp *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="(00) 00000-0000" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="responsible_name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Responsável pelo contrato *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Nome do responsável" {...field} value={field.value || ''} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="responsible_position"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Cargo da pessoa de contato</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Cargo" {...field} value={field.value || ''} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="address" className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <FormField
+                control={form.control}
+                name="zip_code"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>CEP *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="00000-000" {...field} value={field.value || ''} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
               <FormField
                 control={form.control}
                 name="address"
                 render={({ field }) => (
-                  <FormItem className="md:col-span-3">
-                    <FormLabel>Endereço</FormLabel>
+                  <FormItem className="md:col-span-2">
+                    <FormLabel>Endereço (Rua, Avenida, etc.) *</FormLabel>
                     <FormControl>
-                      <Input placeholder="Endereço completo" {...field} />
+                      <Input placeholder="Endereço completo" {...field} value={field.value || ''} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="address_number"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Número *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Número" {...field} value={field.value || ''} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="address_complement"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Complemento</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Complemento" {...field} value={field.value || ''} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="neighborhood"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Bairro *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Bairro" {...field} value={field.value || ''} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -334,9 +688,9 @@ export function ClientForm({ onComplete, client }: ClientFormProps) {
                 name="city"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Cidade</FormLabel>
+                    <FormLabel>Cidade *</FormLabel>
                     <FormControl>
-                      <Input placeholder="Cidade" {...field} />
+                      <Input placeholder="Cidade" {...field} value={field.value || ''} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -348,9 +702,9 @@ export function ClientForm({ onComplete, client }: ClientFormProps) {
                 name="state"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Estado</FormLabel>
+                    <FormLabel>Estado *</FormLabel>
                     <FormControl>
-                      <Input placeholder="Estado" {...field} />
+                      <Input placeholder="Estado" {...field} value={field.value || ''} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -361,6 +715,33 @@ export function ClientForm({ onComplete, client }: ClientFormProps) {
           
           <TabsContent value="services" className="space-y-4">
             <div className="grid grid-cols-1 gap-4">
+              <FormField
+                control={form.control}
+                name="plan"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Plano atual</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value || ''}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione o plano" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="social">Social</SelectItem>
+                        <SelectItem value="trafego">Tráfego</SelectItem>
+                        <SelectItem value="growth_1">Growth 1</SelectItem>
+                        <SelectItem value="growth_2">Growth 2</SelectItem>
+                        <SelectItem value="growth_3">Growth 3</SelectItem>
+                        <SelectItem value="site">Site</SelectItem>
+                        <SelectItem value="personalizado">Personalizado</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
               <FormField
                 control={form.control}
                 name="social_media"
@@ -433,7 +814,7 @@ export function ClientForm({ onComplete, client }: ClientFormProps) {
                 name="contract_value"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Valor do Contrato (R$)</FormLabel>
+                    <FormLabel>Valor do Contrato Mensal (R$)</FormLabel>
                     <FormControl>
                       <Input 
                         type="number" 
@@ -537,9 +918,133 @@ export function ClientForm({ onComplete, client }: ClientFormProps) {
               </div>
             </div>
           </TabsContent>
+          
+          <TabsContent value="social" className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="instagram"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Instagram (perfil comercial)</FormLabel>
+                    <FormControl>
+                      <Input placeholder="@perfil" {...field} value={field.value || ''} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="website"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Website</FormLabel>
+                    <FormControl>
+                      <Input placeholder="https://exemplo.com" {...field} value={field.value || ''} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="whatsapp_link"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Link do WhatsApp Business</FormLabel>
+                    <FormControl>
+                      <Input placeholder="https://wa.me/5500000000000" {...field} value={field.value || ''} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              {/* Other social channels could be implemented with a more complex UI if necessary */}
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="crm" className="space-y-4">
+            <div className="space-y-4">
+              <FormDescription>
+                O cliente receberá acesso ao CRM com os dados cadastrados acima. 
+                Uma senha temporária será gerada automaticamente para o primeiro acesso.
+              </FormDescription>
+              
+              <FormField
+                control={form.control}
+                name="send_email_invite"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel>Enviar convite por e-mail</FormLabel>
+                      <FormDescription>
+                        Será enviado um e-mail com as instruções de acesso
+                      </FormDescription>
+                    </div>
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="send_whatsapp_invite"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel>Enviar convite por WhatsApp</FormLabel>
+                      <FormDescription>
+                        Será enviada uma mensagem de WhatsApp com as instruções de acesso
+                      </FormDescription>
+                    </div>
+                  </FormItem>
+                )}
+              />
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="notes" className="space-y-4">
+            <FormField
+              control={form.control}
+              name="notes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Observações internas</FormLabel>
+                  <FormControl>
+                    <Textarea 
+                      placeholder="Informações adicionais sobre o cliente (visíveis apenas para a equipe)" 
+                      className="min-h-[200px]"
+                      {...field} 
+                      value={field.value || ''}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Estas informações ficarão disponíveis apenas para a equipe interna.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </TabsContent>
         </Tabs>
         
         <div className="flex justify-end space-x-4">
+          <Button type="button" variant="outline" onClick={onComplete}>Cancelar</Button>
           <Button type="submit" disabled={isSubmitting}>
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {isEditing ? "Atualizar Cliente" : "Criar Cliente"}
