@@ -68,7 +68,7 @@ export function MainLayout() {
   }
 
   // Redirect to reset password page if user needs to reset password
-  if (user?.needsPasswordReset) {
+  if (user?.precisa_redefinir_senha) {
     console.log("User needs password reset, redirecting");
     return <Navigate to="/reset-password" replace />;
   }
