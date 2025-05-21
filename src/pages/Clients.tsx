@@ -29,13 +29,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { Search, Plus, MoreHorizontal, Edit, Trash2, FileText, Folder, Loader2, ExternalLink } from "lucide-react";
-import { collection, getDocs, query, orderBy, getFirestore } from "firebase/firestore";
+import { collection, getDocs, query, orderBy, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useToast } from "@/components/ui/use-toast";
+import { toast as sonnerToast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { ClientForm } from "@/components/clients/ClientForm";
-import { toast as sonnerToast } from "sonner";
 
 // Define client interface from Firestore data
 interface Client {
@@ -63,13 +63,14 @@ const Clients = () => {
   const { toast } = useToast();
   const { user } = useAuth();
   const navigate = useNavigate();
+
+  console.log("Clients page - Current user:", user);
   
-  // Fetch clients from Firestore with better error handling
+  // Fetch clients from Firestore with improved error handling
   useEffect(() => {
     const fetchClients = async () => {
       if (!user) {
         console.log("No authenticated user, skipping client fetch");
-        setIsLoading(false);
         return;
       }
       
@@ -78,18 +79,23 @@ const Clients = () => {
         console.log("Attempting to fetch clients with user:", user.email, "role:", user.role, "userType:", user.userType);
         sonnerToast.info("Carregando clientes...");
         
+        // Create query for clients collection
         const clientsRef = collection(db, "clients");
-        const q = query(clientsRef, orderBy("createdAt", "desc"));
-        const querySnapshot = await getDocs(q);
+        let clientsQuery = query(clientsRef, orderBy("createdAt", "desc"));
         
+        // Execute query
+        console.log("Executing clients query");
+        const querySnapshot = await getDocs(clientsQuery);
+        
+        // Process results
         const clientsData: Client[] = [];
         querySnapshot.forEach((doc) => {
           clientsData.push({ ...doc.data(), userId: doc.id } as Client);
         });
         
-        setClients(clientsData);
         console.log("Clients fetched successfully:", clientsData.length);
-        sonnerToast.success(`${clientsData.length} clientes carregados com sucesso!`);
+        setClients(clientsData);
+        sonnerToast.success(`${clientsData.length} clientes carregados!`);
       } catch (error) {
         console.error("Error fetching clients:", error);
         sonnerToast.error("Erro ao carregar clientes. Verifique suas permissões.");

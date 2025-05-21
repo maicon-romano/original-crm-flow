@@ -18,7 +18,7 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
-  userType?: string; // Add userType field
+  userType?: string;
   avatar?: string;
   precisa_redefinir_senha?: boolean;
   createdAt?: Date | number;
@@ -43,7 +43,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Helper function to determine role with priority on admin status
   const determineRole = (userData: any): UserRole => {
-    // Check all possible admin indicators
+    // Check all possible admin indicators with more explicit logging
+    console.log("Determining role from data:", {
+      role: userData.role,
+      userType: userData.userType,
+      tipo_usuario: userData.tipo_usuario
+    });
+    
     if (
       userData.role === "admin" || 
       userData.userType === "admin" ||
@@ -67,30 +73,37 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       if (firebaseUser) {
         try {
-          // First try to get user data from Firestore
-          const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
+          console.log("Fetching user data for:", firebaseUser.uid, firebaseUser.email);
           
-          // Buscar na coleção "usuarios" se não encontrou em "users"
+          // First try to get user data from "users" collection
+          let userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
           let userData = null;
-          if (!userDoc.exists()) {
+          let collectionUsed = "";
+          
+          if (userDoc.exists()) {
+            userData = userDoc.data();
+            collectionUsed = "users";
+            console.log("User found in 'users' collection:", userData);
+          } else {
+            // If not in "users", try "usuarios" collection
             const usuariosDoc = await getDoc(doc(db, "usuarios", firebaseUser.uid));
             if (usuariosDoc.exists()) {
               userData = usuariosDoc.data();
+              collectionUsed = "usuarios";
               console.log("User found in 'usuarios' collection:", userData);
             }
-          } else {
-            userData = userDoc.data();
-            console.log("User found in 'users' collection:", userData);
           }
           
+          // Check if user exists in clients collection as a fallback
           const clientDoc = await getDoc(doc(db, "clients", firebaseUser.uid));
           
-          // Check if user exists in the users collection (admin/staff)
+          // Process user data if found
           if (userData) {
-            console.log("User data found:", userData);
+            console.log("Processing user data:", userData);
             
             // Determine role with priority check on admin status
             const effectiveRole = determineRole(userData);
+            console.log("Determined user role:", effectiveRole);
             
             const currentUser: User = {
               id: firebaseUser.uid,
@@ -108,11 +121,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             
             // Update lastLogin time
             try {
-              if (userDoc.exists()) {
+              if (collectionUsed === "users") {
                 await updateDoc(doc(db, "users", firebaseUser.uid), {
                   lastLogin: new Date().getTime()
                 });
-              } else if (userData) {
+              } else if (collectionUsed === "usuarios") {
                 await updateDoc(doc(db, "usuarios", firebaseUser.uid), {
                   lastLogin: new Date().getTime()
                 });
@@ -124,7 +137,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setUser(currentUser);
             localStorage.setItem("crmUser", JSON.stringify(currentUser));
           } 
-          // Check if user exists in the clients collection
+          // Handle client user case
           else if (clientDoc.exists()) {
             console.log("User found in clients collection");
             const clientData = clientDoc.data();
@@ -149,30 +162,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setUser(currentUser);
             localStorage.setItem("crmUser", JSON.stringify(currentUser));
           } 
-          // User not found in either collection, try to search by email
+          // Search by email as last resort
           else {
             console.log("User not found by ID, searching by email:", firebaseUser.email);
             
-            // Try to find in users collection
+            // Try to find in users collection by email
             const usersRef = collection(db, "users");
             const usersQuery = query(usersRef, where("email", "==", firebaseUser.email));
             const usersSnapshot = await getDocs(usersQuery);
             
-            // Try to find in usuarios collection
+            // Try to find in usuarios collection by email
             const usuariosRef = collection(db, "usuarios");
             const usuariosQuery = query(usuariosRef, where("email", "==", firebaseUser.email));
             const usuariosSnapshot = await getDocs(usuariosQuery);
             
             if (!usersSnapshot.empty) {
-              // User found in users collection
+              // User found in users collection by email
               const userData = usersSnapshot.docs[0].data();
               const docId = usersSnapshot.docs[0].id;
+              
+              // Determine role with priority check on admin status
+              const effectiveRole = determineRole(userData);
+              console.log("User found in users by email. Role:", effectiveRole);
               
               const currentUser: User = {
                 id: firebaseUser.uid,
                 name: userData.name || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
                 email: userData.email || firebaseUser.email || '',
-                role: userData.role as UserRole,
+                role: effectiveRole,
+                userType: userData.userType,
                 avatar: userData.avatar,
                 precisa_redefinir_senha: userData.precisa_redefinir_senha,
                 createdAt: userData.createdAt,
@@ -189,15 +207,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               localStorage.setItem("crmUser", JSON.stringify(currentUser));
             } 
             else if (!usuariosSnapshot.empty) {
-              // User found in usuarios collection
+              // User found in usuarios collection by email
               const userData = usuariosSnapshot.docs[0].data();
               const docId = usuariosSnapshot.docs[0].id;
+              
+              // Determine role with priority check on admin status
+              const effectiveRole = determineRole(userData);
+              console.log("User found in usuarios by email. Role:", effectiveRole);
               
               const currentUser: User = {
                 id: firebaseUser.uid,
                 name: userData.name || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
                 email: userData.email || firebaseUser.email || '',
-                role: userData.role as UserRole,
+                role: effectiveRole,
+                userType: userData.userType,
                 avatar: userData.avatar,
                 precisa_redefinir_senha: userData.precisa_redefinir_senha,
                 createdAt: userData.createdAt,
@@ -244,7 +267,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 setUser(currentUser);
                 localStorage.setItem("crmUser", JSON.stringify(currentUser));
               } else {
-                // User not found in database
+                // User not found in database, create minimal profile
                 console.log("User not found in database, creating minimal profile");
                 
                 // Create a minimal user profile based on Firebase user
@@ -263,7 +286,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         } catch (error) {
           console.error("Error fetching user data:", error);
           
-          // Create a minimal user profile based on Firebase user
+          // Create a minimal user profile based on Firebase user as fallback
           const defaultUser: User = {
             id: firebaseUser.uid,
             name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',

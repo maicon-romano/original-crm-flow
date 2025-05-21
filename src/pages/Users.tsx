@@ -60,6 +60,8 @@ const UsersPage = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
 
+  console.log("UsersPage - Current user:", user);
+
   // Check if current user is admin
   useEffect(() => {
     const isAdmin = user?.role === "admin" || user?.userType === "admin";
@@ -94,19 +96,18 @@ const UsersPage = () => {
         console.log("Fetching users from Firestore...");
         sonnerToast.info("Carregando usuários...");
         
-        // Try usuarios collection first
-        const usuariosRef = collection(db, "usuarios");
-        const usuariosQuery = query(usuariosRef, orderBy("createdAt", "desc"));
-        
+        // Try usuarios collection first with improved error handling
         try {
+          const usuariosRef = collection(db, "usuarios");
+          const usuariosQuery = query(usuariosRef, orderBy("createdAt", "desc"));
           const usuariosSnapshot = await getDocs(usuariosQuery);
-          const usuariosData: User[] = [];
           
+          const usuariosData: User[] = [];
           usuariosSnapshot.forEach((doc) => {
             usuariosData.push({ ...doc.data(), id: doc.id } as User);
           });
           
-          console.log("Usuarios fetched:", usuariosData.length);
+          console.log("Usuarios collection result:", usuariosData.length);
           
           if (usuariosData.length > 0) {
             setUsers(usuariosData);
@@ -118,22 +119,26 @@ const UsersPage = () => {
           console.error("Error fetching from usuarios collection:", error);
         }
         
-        // If no users in usuarios, try users collection
-        const usersRef = collection(db, "users");
-        const usersQuery = query(usersRef, orderBy("createdAt", "desc"));
-        
-        const querySnapshot = await getDocs(usersQuery);
-        
-        const usersData: User[] = [];
-        querySnapshot.forEach((doc) => {
-          usersData.push({ ...doc.data(), id: doc.id } as User);
-        });
-        
-        setUsers(usersData);
-        console.log("Users fetched:", usersData.length);
-        sonnerToast.success(`${usersData.length} usuários carregados!`);
+        // If no users in usuarios or error occurred, try users collection
+        try {
+          const usersRef = collection(db, "users");
+          const usersQuery = query(usersRef, orderBy("createdAt", "desc"));
+          const querySnapshot = await getDocs(usersQuery);
+          
+          const usersData: User[] = [];
+          querySnapshot.forEach((doc) => {
+            usersData.push({ ...doc.data(), id: doc.id } as User);
+          });
+          
+          console.log("Users collection result:", usersData.length);
+          setUsers(usersData);
+          sonnerToast.success(`${usersData.length} usuários carregados!`);
+        } catch (error) {
+          console.error("Error fetching from users collection:", error);
+          sonnerToast.error("Erro ao carregar usuários do banco de dados.");
+        }
       } catch (error) {
-        console.error("Error fetching users:", error);
+        console.error("Error in user fetching process:", error);
         sonnerToast.error("Erro ao carregar usuários. Verifique suas permissões.");
         toast({
           title: "Erro ao carregar usuários",

@@ -38,7 +38,7 @@ export function MainLayout() {
         name: user.name,
         email: user.email,
         role: user.role,
-        userType: user.userType, // Log userType if it exists
+        userType: user.userType,
       } : null, 
       loading, 
       path: location.pathname 
@@ -49,7 +49,7 @@ export function MainLayout() {
     // Check permissions for current route
     if (isAuthenticated && user && !loading) {
       const isAdmin = user.role === "admin" || user.userType === "admin";
-      console.log(`User role check - role: ${user.role}, userType: ${user.userType}, isAdmin: ${isAdmin}`);
+      console.log(`User permission check - role: ${user.role}, userType: ${user.userType}, isAdmin: ${isAdmin}`);
       
       // If user is client and trying to access a non-client route
       if (user.role === "client" && 
