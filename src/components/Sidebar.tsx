@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -40,7 +39,7 @@ export function Sidebar() {
   const { user } = useSupabaseAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [navItems, setNavItems] = useState<SidebarNavItem[]>([]);
-  const { isMobile } = useIsMobile();
+  const isMobile = useIsMobile();
   
   // Determine if the user is an admin
   const isAdmin = user?.role === "admin";
