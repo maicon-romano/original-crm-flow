@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useClients } from "@/hooks/useClients";
 import { ClientsList } from "@/components/clients/ClientsList";
 import { ClientsHeader } from "@/components/clients/ClientsHeader";
@@ -19,14 +19,14 @@ const Clients = () => {
   );
 
   // Client deletion handler
-  const handleDeleteClient = async (id: string) => {
+  const handleDeleteClient = useCallback(async (id: string) => {
     try {
       return await deleteClient(id);
     } catch (error: any) {
       toast.error(error.message || "Erro ao excluir cliente");
       return false;
     }
-  };
+  }, [deleteClient]);
 
   return (
     <div className="space-y-6">

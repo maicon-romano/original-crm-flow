@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useSupabaseAuth } from "@/contexts/SupabaseAuthContext";
@@ -9,8 +9,14 @@ export const useClients = () => {
   const [clients, setClients] = useState<Client[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { user } = useSupabaseAuth();
+  const dataFetchedRef = useRef(false);
 
-  const fetchClients = async () => {
+  const fetchClients = useCallback(async () => {
+    // If already fetched data and this isn't an explicit refresh, skip
+    if (dataFetchedRef.current) {
+      return;
+    }
+
     try {
       setIsLoading(true);
       console.log("Fetching clients...");
@@ -37,13 +43,20 @@ export const useClients = () => {
       })) || [];
       
       setClients(typedClients);
+      dataFetchedRef.current = true;
     } catch (error) {
       console.error("Exception fetching clients:", error);
       toast.error("Erro ao carregar clientes");
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  // Force refresh clients data and show toasts
+  const refreshClients = useCallback(() => {
+    dataFetchedRef.current = false;
+    fetchClients();
+  }, [fetchClients]);
 
   const createClient = async (clientData: Omit<Client, 'id' | 'created_at' | 'updated_at'>) => {
     try {
@@ -80,6 +93,58 @@ export const useClients = () => {
       
       // Add the new client to the clients array
       setClients(prevClients => [typedClient, ...prevClients]);
+
+      // Create Drive folders for the new client if they have a company_name
+      if (typedClient.company_name) {
+        try {
+          const { data: driveData, error: driveError } = await supabase.functions.invoke('create-drive-folders', {
+            body: { client: typedClient }
+          });
+          
+          if (driveError) {
+            console.error("Error creating Drive folders:", driveError);
+            toast.error("Erro ao criar pastas no Google Drive");
+          } else if (driveData?.folder_id) {
+            console.log("Drive folders created successfully:", driveData);
+            toast.success("Pastas do Google Drive criadas com sucesso!");
+            
+            // Update the client with the Drive folder ID
+            updateClient(typedClient.id, { drive_folder_id: driveData.folder_id });
+          }
+        } catch (driveErr) {
+          console.error("Exception creating Drive folders:", driveErr);
+        }
+      }
+
+      // Send email invitation if requested
+      if (typedClient.send_email_invite && typedClient.email) {
+        try {
+          const randomPassword = Math.random().toString(36).slice(-10);
+          
+          const { error: inviteError } = await supabase.functions.invoke('send-invitation', {
+            body: {
+              email: typedClient.email,
+              name: typedClient.contact_name,
+              company: typedClient.company_name,
+              password: randomPassword,
+              role: 'client',
+              position: typedClient.responsible_position || '',
+              phone: typedClient.phone || '',
+              send_whatsapp: typedClient.send_whatsapp_invite || false
+            }
+          });
+          
+          if (inviteError) {
+            console.error("Error sending invitation:", inviteError);
+            toast.error("Erro ao enviar convite por e-mail");
+          } else {
+            toast.success("Convite enviado com sucesso!");
+          }
+        } catch (inviteErr) {
+          console.error("Exception sending invitation:", inviteErr);
+          toast.error("Erro ao enviar convite por e-mail");
+        }
+      }
       
       return typedClient;
     } catch (error: any) {
@@ -150,12 +215,18 @@ export const useClients = () => {
     if (user) {
       fetchClients();
     }
-  }, [user]);
+    
+    // Cleanup function
+    return () => {
+      // Reset the fetch flag when component unmounts
+      dataFetchedRef.current = false;
+    };
+  }, [user, fetchClients]);
 
   return {
     clients,
     isLoading,
-    refreshClients: fetchClients,
+    refreshClients,
     createClient,
     updateClient,
     deleteClient

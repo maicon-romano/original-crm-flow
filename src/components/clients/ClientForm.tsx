@@ -99,9 +99,9 @@ interface ClientFormProps {
   client?: Client;
 }
 
-export function ClientForm({ onComplete, client }: ClientFormProps) {
+export function ClientForm({ onComplete, client: existingClient }: ClientFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const isEditing = !!client;
+  const isEditing = !!existingClient;
   const { createClient, updateClient } = useClients();
   
   const defaultValues: Partial<ClientFormValues> = {
@@ -166,8 +166,8 @@ export function ClientForm({ onComplete, client }: ClientFormProps) {
     form.trigger();
   }, [personType, form]);
   
-  // Handle client data submission
-  const onSubmit = async (data: ClientFormValues) => {
+  // Handle form submission
+  const handleSubmit = async (data: ClientFormValues) => {
     setIsSubmitting(true);
     
     try {
@@ -177,7 +177,7 @@ export function ClientForm({ onComplete, client }: ClientFormProps) {
       const formattedData = {
         ...data,
         // Ensure person_type is required
-        person_type: data.person_type,
+        person_type: data.person_type || "juridica",
         // Format dates for storage
         contract_start: data.contract_start ? data.contract_start.toISOString() : undefined,
         contract_end: data.contract_end ? data.contract_end.toISOString() : undefined,
@@ -193,17 +193,22 @@ export function ClientForm({ onComplete, client }: ClientFormProps) {
         await updateClient(client.id, formattedData);
         toast.success("Cliente atualizado com sucesso!");
       } 
-      // If we're creating a new client
+      // Otherwise create a new client
       else {
-        await createClient(formattedData as Omit<Client, 'id' | 'created_at' | 'updated_at'>);
+        await createClient(formattedData);
         toast.success("Cliente criado com sucesso!");
       }
       
-      // Call the onComplete callback to notify parent component
-      onComplete();
+      // Call the completion callback
+      if (onComplete) onComplete();
+      
+      // Reset the form if not editing
+      if (!isEditing) {
+        form.reset(defaultValues);
+      }
     } catch (error: any) {
       console.error("Error submitting client form:", error);
-      toast.error(error.message || "Erro ao salvar cliente");
+      toast.error(`Erro: ${error.message || 'Ocorreu um erro ao processar o formulário.'}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -211,7 +216,7 @@ export function ClientForm({ onComplete, client }: ClientFormProps) {
   
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
         <Tabs defaultValue="basic">
           <TabsList className="mb-4 flex flex-wrap">
             <TabsTrigger value="basic">Informações Básicas</TabsTrigger>
@@ -605,51 +610,55 @@ export function ClientForm({ onComplete, client }: ClientFormProps) {
             </div>
           </TabsContent>
           
-          <TabsContent value="services" className="space-y-4">
-            <div className="grid grid-cols-1 gap-4">
+          <TabsContent value="services" className="space-y-4 py-4">
+            <div className="space-y-4">
               <FormField
                 control={form.control}
                 name="plan"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Plano atual</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value || ''}>
+                    <FormLabel>Plano de Serviço</FormLabel>
+                    <Select 
+                      onValueChange={field.onChange} 
+                      defaultValue={field.value}
+                    >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Selecione o plano" />
+                          <SelectValue placeholder="Selecione um plano" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="social">Social</SelectItem>
-                        <SelectItem value="trafego">Tráfego</SelectItem>
+                        <SelectItem value="essentials">Essentials</SelectItem>
                         <SelectItem value="growth_1">Growth 1</SelectItem>
                         <SelectItem value="growth_2">Growth 2</SelectItem>
-                        <SelectItem value="growth_3">Growth 3</SelectItem>
-                        <SelectItem value="site">Site</SelectItem>
+                        <SelectItem value="premium">Premium</SelectItem>
                         <SelectItem value="personalizado">Personalizado</SelectItem>
                       </SelectContent>
                     </Select>
-                    <FormMessage />
+                    <FormDescription>
+                      Selecione o plano de serviço contratado pelo cliente
+                    </FormDescription>
                   </FormItem>
                 )}
               />
               
-              {selectedPlan === "personalizado" && (
+              {form.watch("plan") === "personalizado" && (
                 <FormField
                   control={form.control}
                   name="custom_plan_details"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Detalhes do plano personalizado</FormLabel>
+                      <FormLabel>Detalhes do Plano Personalizado</FormLabel>
                       <FormControl>
-                        <Textarea 
-                          placeholder="Descreva os detalhes do plano personalizado" 
-                          className="min-h-[100px]"
+                        <Textarea
+                          placeholder="Descreva o plano personalizado..."
+                          className="min-h-[120px]"
                           {...field}
-                          value={field.value || ''}
                         />
                       </FormControl>
-                      <FormMessage />
+                      <FormDescription>
+                        Detalhe os serviços incluídos neste plano personalizado
+                      </FormDescription>
                     </FormItem>
                   )}
                 />
