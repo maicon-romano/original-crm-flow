@@ -10,7 +10,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { generateTemporaryPassword } from "@/lib/utils";
+import { useSupabaseAuth } from "@/contexts/SupabaseAuthContext";
 
 // Form schema for validation
 const userFormSchema = z.object({
@@ -30,6 +30,7 @@ interface UserFormProps {
 
 export const UserForm = ({ onComplete, user }: UserFormProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { user: currentUser } = useSupabaseAuth();
   
   // Initialize form
   const form = useForm<UserFormValues>({
@@ -44,49 +45,41 @@ export const UserForm = ({ onComplete, user }: UserFormProps) => {
   });
 
   const handleSubmit = async (data: UserFormValues) => {
+    if (!currentUser) {
+      toast.error("Você precisa estar logado para adicionar usuários");
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       
-      // Generate temporary password
-      const tempPassword = generateTemporaryPassword();
+      const invitedBy = {
+        name: currentUser.name,
+        email: currentUser.email
+      };
       
-      // Create supabase auth user
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email: data.email,
-        password: tempPassword,
-        email_confirm: true, // Auto-confirm email
-        user_metadata: { 
+      // Utilize a função Edge para enviar o convite
+      const { data: responseData, error } = await supabase.functions.invoke("send-invitation", {
+        body: {
+          email: data.email,
           name: data.name,
-          role: data.role
+          role: data.role,
+          position: data.position,
+          invitedBy
         }
       });
       
-      if (authError) {
-        throw authError;
+      if (error) {
+        throw error;
       }
       
-      // The user record in the public.users table will be automatically created
-      // via the trigger we set up in the database
-      
-      // However, we need to update some additional fields that aren't handled by the trigger
-      const { error: updateError } = await supabase
-        .from("users")
-        .update({
-          phone: data.phone || null,
-          position: data.position || null,
-          last_temp_password: tempPassword
-        })
-        .eq("id", authData.user.id);
-      
-      if (updateError) {
-        throw updateError;
+      if (!responseData.success) {
+        throw new Error(responseData.error || "Erro ao criar usuário");
       }
       
       toast.success(`${data.name} foi cadastrado com sucesso`, {
-        description: `Senha temporária: ${tempPassword}`
+        description: "Um email foi enviado com as instruções de acesso"
       });
-      
-      // TODO: Implement email sending via Resend Edge Function
       
       onComplete();
     } catch (error: any) {

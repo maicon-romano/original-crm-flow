@@ -38,3 +38,6 @@ enabled = true
 
 [edge_functions]
 enabled = true
+
+[functions.send-invitation]
+verify_jwt = true
