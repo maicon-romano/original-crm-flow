@@ -3,7 +3,7 @@
 // https://docs.supabase.com/guides/functions/deno-runtime#using-typescript
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4'
-import { google } from "https://deno.land/x/googleapis@v115.0.0/googleapis.ts";
+import { google } from "npm:googleapis@126.0.1";
 import { corsHeaders } from '../_shared/cors.ts'
 
 interface ClientData {

@@ -3,7 +3,7 @@
 // https://docs.supabase.com/guides/functions/deno-runtime#using-typescript
 
 import { corsHeaders } from '../_shared/cors.ts'
-import { google } from "https://deno.land/x/googleapis@v115.0.0/googleapis.ts";
+import { google } from "npm:googleapis@126.0.1";
 
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
