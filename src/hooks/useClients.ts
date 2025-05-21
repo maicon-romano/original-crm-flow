@@ -72,6 +72,11 @@ export interface Client {
   drive_folder_id?: string;
 }
 
+// Create a type for client insertion without ID and timestamps
+type ClientInsert = Omit<Client, 'id' | 'created_at' | 'updated_at'> & {
+  company_name: string; // Making sure company_name is required for database insertion
+};
+
 export const useClients = () => {
   const [clients, setClients] = useState<Client[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -115,14 +120,19 @@ export const useClients = () => {
   const createClient = async (clientData: Omit<Client, 'id' | 'created_at' | 'updated_at'>) => {
     try {
       console.log("Creating client:", clientData);
+
+      // Ensure required fields are present for database insertion
+      const insertData = {
+        ...clientData,
+        company_name: clientData.person_type === "juridica" ? clientData.company_name || "" : "",
+        contact_name: clientData.contact_name || "",
+        email: clientData.email || "",
+        status: clientData.status || "active"
+      };
       
       const { data, error } = await supabase
         .from('clients')
-        .insert({
-          ...clientData,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
+        .insert(insertData)
         .select('*')
         .single();
       
