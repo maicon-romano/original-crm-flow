@@ -147,14 +147,6 @@ const Login = () => {
             </CardFooter>
           </form>
         </Card>
-        
-        <div className="text-center mt-6 text-sm text-muted-foreground">
-          <p>Dicas para demonstração:</p>
-          <p>Admin: admin@originaldigital.com / password</p>
-          <p>Usuário: user@originaldigital.com / password</p>
-          <p>Cliente: client@example.com / password</p>
-          <p>Firebase: maicon.romano@originaldigital.com.br / Ma17romano</p>
-        </div>
       </div>
     </div>
   );
