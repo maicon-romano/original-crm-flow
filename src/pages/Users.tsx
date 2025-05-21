@@ -5,10 +5,10 @@ import { useAuth } from "@/contexts/AuthContext";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, query, orderBy } from "firebase/firestore";
 import { useToast } from "@/components/ui/use-toast";
+import { toast as sonnerToast } from "sonner";
 import { 
   Table, 
   TableBody, 
-  TableCaption, 
   TableCell, 
   TableFooter, 
   TableHead, 
@@ -21,7 +21,6 @@ import {
   Dialog,
   DialogContent, 
   DialogDescription, 
-  DialogFooter, 
   DialogHeader, 
   DialogTitle, 
   DialogTrigger 
@@ -46,6 +45,7 @@ interface User {
   cargo?: string;
   position?: string;
   role: string;
+  userType?: string;
   active: boolean;
   createdAt: number;
   updatedAt: number;
@@ -62,7 +62,14 @@ const UsersPage = () => {
 
   // Check if current user is admin
   useEffect(() => {
-    if (user && user.role !== "admin") {
+    const isAdmin = user?.role === "admin" || user?.userType === "admin";
+    console.log("UsersPage - Checking admin permission:", { 
+      userRole: user?.role, 
+      userType: user?.userType, 
+      isAdmin 
+    });
+    
+    if (user && !isAdmin) {
       toast({
         title: "Acesso restrito",
         description: "Você não tem permissão para acessar esta página.",
@@ -74,12 +81,18 @@ const UsersPage = () => {
 
   // Fetch users from Firestore - try both "users" and "usuarios" collections
   useEffect(() => {
+    const isAdmin = user?.role === "admin" || user?.userType === "admin";
+    
     const fetchUsers = async () => {
-      if (user?.role !== "admin") return;
+      if (!isAdmin) {
+        console.log("User is not admin, skipping user fetch");
+        return;
+      }
       
       try {
         setIsLoading(true);
         console.log("Fetching users from Firestore...");
+        sonnerToast.info("Carregando usuários...");
         
         // Try usuarios collection first
         const usuariosRef = collection(db, "usuarios");
@@ -97,6 +110,7 @@ const UsersPage = () => {
           
           if (usuariosData.length > 0) {
             setUsers(usuariosData);
+            sonnerToast.success(`${usuariosData.length} usuários carregados!`);
             setIsLoading(false);
             return;
           }
@@ -117,8 +131,10 @@ const UsersPage = () => {
         
         setUsers(usersData);
         console.log("Users fetched:", usersData.length);
+        sonnerToast.success(`${usersData.length} usuários carregados!`);
       } catch (error) {
         console.error("Error fetching users:", error);
+        sonnerToast.error("Erro ao carregar usuários. Verifique suas permissões.");
         toast({
           title: "Erro ao carregar usuários",
           description: "Não foi possível carregar a lista de usuários.",
@@ -129,14 +145,20 @@ const UsersPage = () => {
       }
     };
     
-    fetchUsers();
+    // Fetch users with a small delay to ensure auth is fully resolved
+    if (user) {
+      setTimeout(() => {
+        fetchUsers();
+      }, 500);
+    }
   }, [user, toast]);
 
   // Filter users based on search query
   const filteredUsers = users.filter(user => 
     user.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     user.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    user.cargo?.toLowerCase().includes(searchQuery.toLowerCase())
+    user.cargo?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    user.position?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   // Format date from timestamp
@@ -151,6 +173,7 @@ const UsersPage = () => {
     // Refetch users
     const fetchUsers = async () => {
       try {
+        sonnerToast.info("Atualizando lista de usuários...");
         // Try first from usuarios collection
         const usuariosRef = collection(db, "usuarios");
         const usuariosQuery = query(usuariosRef, orderBy("createdAt", "desc"));
@@ -167,6 +190,7 @@ const UsersPage = () => {
           
           if (usuariosData.length > 0) {
             setUsers(usuariosData);
+            sonnerToast.success("Lista de usuários atualizada!");
             return;
           }
         } catch (error) {
@@ -185,17 +209,27 @@ const UsersPage = () => {
         });
         
         setUsers(usersData);
+        sonnerToast.success("Lista de usuários atualizada!");
       } catch (error) {
         console.error("Error refetching users:", error);
+        sonnerToast.error("Erro ao atualizar lista de usuários");
       }
     };
     
     fetchUsers();
   };
 
-  // If user is not admin, don't render the page
-  if (user?.role !== "admin") {
-    return null;
+  // Check if current user is admin
+  const isAdmin = user?.role === "admin" || user?.userType === "admin";
+
+  // If user is not admin, show loading or redirect
+  if (!isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64">
+        <h2 className="text-xl font-semibold mb-2">Verificando permissões...</h2>
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
+      </div>
+    );
   }
 
   return (
@@ -265,10 +299,10 @@ const UsersPage = () => {
                     <TableCell>{userData.cargo || userData.position || "-"}</TableCell>
                     <TableCell>
                       <Badge
-                        variant={userData.role === "admin" ? "default" : "outline"}
-                        className={userData.role === "admin" ? "bg-blue-500" : ""}
+                        variant={(userData.role === "admin" || userData.userType === "admin") ? "default" : "outline"}
+                        className={(userData.role === "admin" || userData.userType === "admin") ? "bg-blue-500" : ""}
                       >
-                        {userData.role === "admin" ? "Administrador" : "Funcionário"}
+                        {(userData.role === "admin" || userData.userType === "admin") ? "Administrador" : "Funcionário"}
                       </Badge>
                     </TableCell>
                     <TableCell>{formatDate(userData.createdAt)}</TableCell>

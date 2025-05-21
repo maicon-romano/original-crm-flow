@@ -3,7 +3,6 @@ import { useState, useEffect } from "react";
 import { 
   Table, 
   TableBody, 
-  TableCaption, 
   TableCell, 
   TableFooter, 
   TableHead, 
@@ -16,7 +15,6 @@ import {
   Dialog,
   DialogContent, 
   DialogDescription, 
-  DialogFooter, 
   DialogHeader, 
   DialogTitle, 
   DialogTrigger 
@@ -30,15 +28,14 @@ import {
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Search, Plus, MoreHorizontal, Edit, Trash2, FileText, Folder, Loader2, ExternalLink } from "lucide-react";
-import { collection, getDocs, query, orderBy } from "firebase/firestore";
+import { collection, getDocs, query, orderBy, getFirestore } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { ClientForm } from "@/components/clients/ClientForm";
+import { toast as sonnerToast } from "sonner";
 
 // Define client interface from Firestore data
 interface Client {
@@ -67,11 +64,20 @@ const Clients = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   
-  // Fetch clients from Firestore
+  // Fetch clients from Firestore with better error handling
   useEffect(() => {
     const fetchClients = async () => {
+      if (!user) {
+        console.log("No authenticated user, skipping client fetch");
+        setIsLoading(false);
+        return;
+      }
+      
       try {
         setIsLoading(true);
+        console.log("Attempting to fetch clients with user:", user.email, "role:", user.role, "userType:", user.userType);
+        sonnerToast.info("Carregando clientes...");
+        
         const clientsRef = collection(db, "clients");
         const q = query(clientsRef, orderBy("createdAt", "desc"));
         const querySnapshot = await getDocs(q);
@@ -82,12 +88,14 @@ const Clients = () => {
         });
         
         setClients(clientsData);
-        console.log("Clients fetched:", clientsData.length);
+        console.log("Clients fetched successfully:", clientsData.length);
+        sonnerToast.success(`${clientsData.length} clientes carregados com sucesso!`);
       } catch (error) {
         console.error("Error fetching clients:", error);
+        sonnerToast.error("Erro ao carregar clientes. Verifique suas permissões.");
         toast({
           title: "Erro ao carregar clientes",
-          description: "Não foi possível carregar a lista de clientes.",
+          description: "Não foi possível carregar a lista de clientes. Verifique suas permissões.",
           variant: "destructive",
         });
       } finally {
@@ -95,8 +103,14 @@ const Clients = () => {
       }
     };
     
-    fetchClients();
-  }, [toast]);
+    // Only fetch clients if user is authenticated
+    if (user) {
+      // Add a small delay to ensure auth is fully resolved
+      setTimeout(() => {
+        fetchClients();
+      }, 500);
+    }
+  }, [toast, user]);
   
   // Filter clients based on search query
   const filteredClients = clients.filter(client => 
@@ -131,6 +145,7 @@ const Clients = () => {
     // Refetch clients
     const fetchClients = async () => {
       try {
+        sonnerToast.info("Atualizando lista de clientes...");
         const clientsRef = collection(db, "clients");
         const q = query(clientsRef, orderBy("createdAt", "desc"));
         const querySnapshot = await getDocs(q);
@@ -141,8 +156,10 @@ const Clients = () => {
         });
         
         setClients(clientsData);
+        sonnerToast.success("Lista de clientes atualizada!");
       } catch (error) {
         console.error("Error refetching clients:", error);
+        sonnerToast.error("Erro ao atualizar lista de clientes");
       }
     };
     
@@ -150,11 +167,17 @@ const Clients = () => {
   };
 
   // Check if user has permission to manage clients
-  const canManageClients = user && (user.role === "admin" || user.role === "user");
+  const isAdmin = user?.role === "admin" || user?.userType === "admin";
+  const canManageClients = user && (isAdmin || user.role === "user");
 
-  if (!canManageClients) {
-    navigate("/dashboard");
-    return null;
+  // If user is not logged in or doesn't have permission, redirect
+  if (!user) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64">
+        <h2 className="text-xl font-semibold mb-2">Carregando informações...</h2>
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
+      </div>
+    );
   }
 
   return (
@@ -261,7 +284,7 @@ const Clients = () => {
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>Ações</DropdownMenuLabel>
                           <DropdownMenuSeparator />
-                          {user?.role === "admin" && (
+                          {isAdmin && (
                             <DropdownMenuItem>
                               <Edit className="mr-2 h-4 w-4" /> Editar
                             </DropdownMenuItem>
@@ -279,7 +302,7 @@ const Clients = () => {
                             </DropdownMenuItem>
                           )}
                           <DropdownMenuSeparator />
-                          {user?.role === "admin" && (
+                          {isAdmin && (
                             <DropdownMenuItem className="text-destructive">
                               <Trash2 className="mr-2 h-4 w-4" /> Excluir
                             </DropdownMenuItem>

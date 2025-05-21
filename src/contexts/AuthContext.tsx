@@ -18,6 +18,7 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
+  userType?: string; // Add userType field
   avatar?: string;
   precisa_redefinir_senha?: boolean;
   createdAt?: Date | number;
@@ -39,6 +40,23 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Helper function to determine role with priority on admin status
+  const determineRole = (userData: any): UserRole => {
+    // Check all possible admin indicators
+    if (
+      userData.role === "admin" || 
+      userData.userType === "admin" ||
+      userData.tipo_usuario === "admin"
+    ) {
+      console.log("User has admin privileges");
+      return "admin";
+    } else if (userData.role === "client" || userData.role === "cliente") {
+      return "client";
+    } else {
+      return userData.role || "user";
+    }
+  };
 
   // Listen for authentication state changes
   useEffect(() => {
@@ -71,11 +89,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           if (userData) {
             console.log("User data found:", userData);
             
+            // Determine role with priority check on admin status
+            const effectiveRole = determineRole(userData);
+            
             const currentUser: User = {
               id: firebaseUser.uid,
               name: userData.name || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
               email: userData.email || firebaseUser.email || '',
-              role: userData.role as UserRole,
+              role: effectiveRole,
+              userType: userData.userType,
               avatar: userData.avatar,
               precisa_redefinir_senha: userData.precisa_redefinir_senha,
               createdAt: userData.createdAt,
@@ -90,7 +112,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 await updateDoc(doc(db, "users", firebaseUser.uid), {
                   lastLogin: new Date().getTime()
                 });
-              } else {
+              } else if (userData) {
                 await updateDoc(doc(db, "usuarios", firebaseUser.uid), {
                   lastLogin: new Date().getTime()
                 });

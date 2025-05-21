@@ -20,8 +20,8 @@ const ADMIN_ONLY_ROUTES = [
   "/financeiro",
   "/contratos",
   "/relatorios",
-  "/usuarios", // Corrigido para incluir a rota de usuários
-  "/users"      // Alias em inglês
+  "/usuarios", 
+  "/users"
 ];
 
 export function MainLayout() {
@@ -29,14 +29,28 @@ export function MainLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   
-  // Debug authentication status
+  // Debug authentication status with more user details
   useEffect(() => {
-    console.log("MainLayout - Auth status:", { isAuthenticated, user, loading, path: location.pathname });
+    console.log("MainLayout - Auth status:", { 
+      isAuthenticated, 
+      user: user ? {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        userType: user.userType, // Log userType if it exists
+      } : null, 
+      loading, 
+      path: location.pathname 
+    });
   }, [isAuthenticated, user, loading, location.pathname]);
 
   useEffect(() => {
     // Check permissions for current route
     if (isAuthenticated && user && !loading) {
+      const isAdmin = user.role === "admin" || user.userType === "admin";
+      console.log(`User role check - role: ${user.role}, userType: ${user.userType}, isAdmin: ${isAdmin}`);
+      
       // If user is client and trying to access a non-client route
       if (user.role === "client" && 
           !CLIENT_ROUTES.includes(location.pathname) && 
@@ -45,8 +59,8 @@ export function MainLayout() {
         navigate("/meus-projetos");
       }
       
-      // If user is regular user and trying to access admin-only route
-      if ((user.role === "user" || user.role === "funcionario") && 
+      // If user is regular user (not admin) and trying to access admin-only route
+      if (!isAdmin && 
           ADMIN_ONLY_ROUTES.some(route => location.pathname.startsWith(route))) {
         console.log("Regular user accessing admin route, redirecting to /dashboard");
         navigate("/dashboard");
@@ -94,4 +108,3 @@ export function MainLayout() {
     </div>
   );
 }
-
