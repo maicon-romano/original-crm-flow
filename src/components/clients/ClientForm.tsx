@@ -29,10 +29,8 @@ const clientFormSchema = z.object({
   person_type: z.enum(["juridica", "fisica"]),
   
   // Juridical person fields
-  legal_name: z.string().optional().refine(val => val && val.length >= 2 || false, 
-    { message: "Razão Social é obrigatória para pessoa jurídica" }),
-  fantasy_name: z.string().optional().refine(val => val && val.length >= 2 || false, 
-    { message: "Nome Fantasia é obrigatória para pessoa jurídica" }),
+  legal_name: z.string().optional(),
+  fantasy_name: z.string().optional(),
   company_name: z.string().optional(),
   tax_id: z.string().optional(),
   state_registration: z.string().optional(),
@@ -86,6 +84,12 @@ const clientFormSchema = z.object({
   
   // Notes
   notes: z.string().optional(),
+}).transform((data) => {
+  // Add conditional validation - if person_type is "juridica", company_name or fantasy_name are required
+  if (data.person_type === "juridica" && !data.company_name && !data.fantasy_name && !data.legal_name) {
+    throw new Error("Para pessoa jurídica, Razão Social ou Nome Fantasia é obrigatório");
+  }
+  return data;
 });
 
 type ClientFormValues = z.infer<typeof clientFormSchema>;
@@ -169,36 +173,31 @@ export function ClientForm({ onComplete, client }: ClientFormProps) {
     try {
       console.log("Submitting client form data:", data);
       
+      // Format the data for submission
+      const formattedData = {
+        ...data,
+        // Ensure person_type is required
+        person_type: data.person_type,
+        // Format dates for storage
+        contract_start: data.contract_start ? data.contract_start.toISOString() : undefined,
+        contract_end: data.contract_end ? data.contract_end.toISOString() : undefined,
+        // Handle notes field based on plan selection
+        notes: data.plan === "personalizado" ? data.custom_plan_details : data.notes,
+      };
+
       // If we're editing an existing client
       if (isEditing && client) {
-        // Convert contract dates to ISO strings
-        const formattedData = {
-          ...data,
-          contract_start: data.contract_start?.toISOString(),
-          contract_end: data.contract_end?.toISOString(),
-          notes: data.plan === "personalizado" ? data.custom_plan_details : data.notes,
-        };
-
-        const updatedClient = await updateClient(client.id, formattedData);
-        
+        await updateClient(client.id, formattedData);
         toast.success("Cliente atualizado com sucesso!");
-        onComplete();
       } 
       // If we're creating a new client
       else {
-        // Convert contract dates to ISO strings
-        const formattedData = {
-          ...data,
-          contract_start: data.contract_start?.toISOString(),
-          contract_end: data.contract_end?.toISOString(),
-          notes: data.plan === "personalizado" ? data.custom_plan_details : data.notes,
-        };
-
-        const newClient = await createClient(formattedData);
-        
+        await createClient(formattedData as Omit<Client, 'id' | 'created_at' | 'updated_at'>);
         toast.success("Cliente criado com sucesso!");
-        onComplete();
       }
+      
+      // Call the onComplete callback to notify parent component
+      onComplete();
     } catch (error: any) {
       console.error("Error submitting client form:", error);
       toast.error(error.message || "Erro ao salvar cliente");
@@ -644,6 +643,7 @@ export function ClientForm({ onComplete, client }: ClientFormProps) {
                           placeholder="Descreva os detalhes do plano personalizado" 
                           className="min-h-[100px]"
                           {...field}
+                          value={field.value || ''}
                         />
                       </FormControl>
                       <FormMessage />

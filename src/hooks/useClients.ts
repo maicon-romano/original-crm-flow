@@ -52,6 +52,8 @@ export const useClients = () => {
       // Ensure required fields are present for database insertion
       const insertData: ClientInsert = {
         ...clientData,
+        // Make sure person_type is always defined with a default value if missing
+        person_type: clientData.person_type || "juridica",
         company_name: clientData.person_type === "juridica" ? clientData.company_name || clientData.fantasy_name || "" : clientData.company_name || "",
         contact_name: clientData.contact_name || "",
         email: clientData.email || "",

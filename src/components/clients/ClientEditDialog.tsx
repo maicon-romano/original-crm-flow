@@ -1,5 +1,5 @@
 
-import { Client } from "@/hooks/useClients";
+import { Client } from "@/types/client";
 import { 
   Dialog,
   DialogContent, 
