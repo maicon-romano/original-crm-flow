@@ -2,7 +2,7 @@
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
 
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
@@ -21,5 +21,18 @@ const app = initializeApp(firebaseConfig);
 const analytics = getAnalytics(app);
 const auth = getAuth(app);
 const db = getFirestore(app);
+
+// Enable offline persistence
+try {
+  enableIndexedDbPersistence(db)
+    .then(() => {
+      console.log("Firestore persistence enabled");
+    })
+    .catch((err) => {
+      console.error("Firestore persistence error:", err.code, err.message);
+    });
+} catch (err) {
+  console.warn("Firestore persistence not enabled:", err);
+}
 
 export { app, analytics, auth, db };

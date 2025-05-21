@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -68,9 +69,12 @@ export function Sidebar() {
 
   if (!user) return null;
 
-  // Check if user is admin (check both role and userType fields)
-  const isAdmin = user.role === "admin" || user.userType === "admin";
-  const isStaff = isAdmin || user.role === "user" || user.role === "funcionario";
+  // Priority check for admin - special email or role/userType
+  const isAdmin = user.email === "maicon.romano@originaldigital.com.br" || 
+                 user.role === "admin" || 
+                 user.userType === "admin";
+                 
+  const isStaff = isAdmin || user.role === "user" || user.role === "funcionario" || user.role === "usuario";
   const isClient = user.role === "client" || user.role === "cliente";
   
   console.log("Sidebar - User role:", user.role, "userType:", user.userType, "isAdmin:", isAdmin);

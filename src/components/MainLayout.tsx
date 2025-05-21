@@ -48,8 +48,12 @@ export function MainLayout() {
   useEffect(() => {
     // Check permissions for current route
     if (isAuthenticated && user && !loading) {
-      const isAdmin = user.role === "admin" || user.userType === "admin";
-      console.log(`User permission check - role: ${user.role}, userType: ${user.userType}, isAdmin: ${isAdmin}`);
+      // Check if user is admin - prioritizing special email or role/userType fields
+      const isAdmin = user.email === "maicon.romano@originaldigital.com.br" || 
+                     user.role === "admin" || 
+                     user.userType === "admin";
+                     
+      console.log(`User role check - role: ${user.role}, userType: ${user.userType}, isAdmin: ${isAdmin}`);
       
       // If user is client and trying to access a non-client route
       if (user.role === "client" && 
