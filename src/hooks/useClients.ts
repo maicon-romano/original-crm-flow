@@ -98,7 +98,9 @@ export const useClients = () => {
       // Transform the data to ensure person_type is properly typed
       const typedClients = data?.map(client => ({
         ...client,
-        person_type: (client.person_type === "fisica" ? "fisica" : "juridica") as "juridica" | "fisica"
+        person_type: (client.person_type === "fisica" ? "fisica" : "juridica") as "juridica" | "fisica",
+        // Ensure other_social_media is properly typed as Record<string, string> or undefined
+        other_social_media: client.other_social_media ? client.other_social_media as Record<string, string> : undefined
       })) || [];
       
       setClients(typedClients);
