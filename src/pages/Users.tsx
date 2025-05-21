@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSupabaseAuth } from "@/contexts/SupabaseAuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -60,6 +60,7 @@ const UsersPage = () => {
   const { user } = useSupabaseAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const isMounted = useRef(true);
 
   // Check if current user is admin
   useEffect(() => {
@@ -81,11 +82,12 @@ const UsersPage = () => {
 
   // Fetch users from Supabase
   useEffect(() => {
+    isMounted.current = true;
     const isAdmin = user?.role === "admin";
     
     const fetchUsers = async () => {
-      if (!isAdmin) {
-        console.log("User is not admin, skipping user fetch");
+      if (!isAdmin || !isMounted.current) {
+        console.log("User is not admin or component unmounted, skipping user fetch");
         return;
       }
       
@@ -107,33 +109,50 @@ const UsersPage = () => {
             .order("created_at", { ascending: false });
           
           if (directError) throw directError;
-          setUsers(directData || []);
+          
+          if (isMounted.current) {
+            setUsers(directData || []);
+          }
         } else {
           console.log("Users data from RPC:", data);
-          setUsers(data as User[]);
+          
+          if (isMounted.current) {
+            setUsers(data as User[]);
+          }
         }
         
-        sonnerToast.success(`${data?.length || 0} usuários carregados!`);
+        if (isMounted.current) {
+          sonnerToast.success(`${data?.length || 0} usuários carregados!`);
+        }
       } catch (error: any) {
         console.error("Error fetching users:", error);
-        sonnerToast.error("Erro ao carregar usuários. Verifique suas permissões.");
-        toast({
-          title: "Erro ao carregar usuários",
-          description: "Não foi possível carregar a lista de usuários.",
-          variant: "destructive",
-        });
+        
+        if (isMounted.current) {
+          sonnerToast.error("Erro ao carregar usuários. Verifique suas permissões.");
+          toast({
+            title: "Erro ao carregar usuários",
+            description: "Não foi possível carregar a lista de usuários.",
+            variant: "destructive",
+          });
+        }
       } finally {
-        setIsLoading(false);
+        if (isMounted.current) {
+          setIsLoading(false);
+        }
       }
     };
     
     // Fetch users with a small delay to ensure auth is fully resolved
     if (user) {
-      setTimeout(() => {
-        fetchUsers();
-      }, 500);
+      // Only fetch once when the component mounts
+      fetchUsers();
     }
-  }, [user, toast]);
+    
+    // Cleanup function to prevent state updates on unmounted component
+    return () => {
+      isMounted.current = false;
+    };
+  }, [user, toast]); // Keep proper dependencies
 
   // Filter users based on search query
   const filteredUsers = users.filter(user => 
