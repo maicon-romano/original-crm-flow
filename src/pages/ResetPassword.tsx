@@ -1,13 +1,14 @@
 
-import { useState, FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { useState, FormEvent, useEffect } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useSupabaseAuth } from "@/contexts/SupabaseAuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertTriangle, CheckCircle } from "lucide-react"; // Changed from ExclamationTriangleIcon to AlertTriangle
+import { AlertTriangle, CheckCircle, Loader2 } from "lucide-react"; 
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 const ResetPassword = () => {
   const [email, setEmail] = useState("");
@@ -15,6 +16,52 @@ const ResetPassword = () => {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const { resetPassword } = useSupabaseAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Efeito para tentar ler parâmetros de autenticação da URL e lidar com erros
+  useEffect(() => {
+    // Processar parâmetros de URL ou hash
+    const processAuthParams = async () => {
+      // Verificar por erros no hash da URL (formato #error=xxx&error_description=xxx)
+      if (location.hash) {
+        const hashParams = new URLSearchParams(location.hash.substring(1));
+        const error = hashParams.get("error");
+        const errorDescription = hashParams.get("error_description");
+        
+        if (error) {
+          console.error("Auth error:", error, errorDescription);
+          
+          if (error === "access_denied" && errorDescription?.includes("expired")) {
+            toast.error("O link expirou ou é inválido. Por favor, solicite um novo link de redefinição de senha.", {
+              duration: 6000,
+            });
+          } else {
+            toast.error(errorDescription || "Ocorreu um erro na autenticação", {
+              duration: 6000,
+            });
+          }
+          
+          // Limpar a URL após processar o erro
+          window.history.replaceState({}, document.title, location.pathname);
+        }
+      }
+      
+      // Verificar por token na query string (formato ?token=xxx)
+      const queryParams = new URLSearchParams(location.search);
+      const token = queryParams.get("token");
+      
+      if (token) {
+        // Redirecionar para a página de atualização de senha com o token
+        navigate("/update-password", { 
+          state: { token },
+          replace: true
+        });
+      }
+    };
+
+    processAuthParams();
+  }, [location, navigate]);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -47,7 +94,7 @@ const ResetPassword = () => {
         <div className="bg-white p-8 shadow-lg rounded-lg dark:bg-gray-800">
           {error && (
             <Alert variant="destructive" className="mb-6">
-              <AlertTriangle className="h-4 w-4" /> {/* Changed icon */}
+              <AlertTriangle className="h-4 w-4" />
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
@@ -87,7 +134,7 @@ const ResetPassword = () => {
               >
                 {isSubmitting ? (
                   <>
-                    <span className="mr-2 h-4 w-4 animate-spin rounded-full border-t-2 border-white"></span>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Enviando...
                   </>
                 ) : (

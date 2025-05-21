@@ -1,6 +1,6 @@
 
-import { useState, FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, FormEvent, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useSupabaseAuth } from "@/contexts/SupabaseAuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,14 +8,63 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle, CheckCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 const UpdatePassword = () => {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [isProcessingToken, setIsProcessingToken] = useState(false);
   const { updateUserPassword, user } = useSupabaseAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Verifica se há um token na URL ou no estado da rota
+  useEffect(() => {
+    const checkToken = async () => {
+      // Primeiro verificar o state (passado pelo ResetPassword.tsx)
+      const token = location.state?.token;
+      
+      if (token) {
+        setIsProcessingToken(true);
+        console.log("Encontrado token no estado da rota");
+        
+        try {
+          // Verifica se o token ainda é válido
+          const { error } = await supabase.auth.verifyOtp({
+            token_hash: token,
+            type: 'recovery',
+          });
+          
+          if (error) {
+            console.error("Erro ao verificar token:", error);
+            toast.error("O link de redefinição de senha expirou ou é inválido. Por favor, solicite um novo.");
+            navigate("/reset-password", { replace: true });
+            return;
+          }
+          
+          // Se não houver erro, o token é válido e o usuário está autenticado
+          toast.success("Agora você pode definir sua nova senha");
+        } catch (err) {
+          console.error("Exceção ao verificar token:", err);
+          toast.error("Ocorreu um erro ao processar sua solicitação");
+          navigate("/reset-password", { replace: true });
+        } finally {
+          setIsProcessingToken(false);
+        }
+      } else if (!user) {
+        // Se não há token no estado e o usuário não está logado, redirecionar
+        console.log("Sem token e usuário não autenticado, redirecionando");
+        toast.error("Você precisa estar logado ou ter um link válido de redefinição de senha");
+        navigate("/login", { replace: true });
+      } else {
+        console.log("Usuário já autenticado, permitindo troca de senha");
+      }
+    };
+
+    checkToken();
+  }, [location.state, navigate, user]);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -45,6 +94,17 @@ const UpdatePassword = () => {
       setIsSubmitting(false);
     }
   };
+
+  if (isProcessingToken) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p>Verificando seu link de redefinição de senha...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/40 p-4 dark:bg-gray-900">

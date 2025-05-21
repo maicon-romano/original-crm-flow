@@ -21,8 +21,16 @@ serve(async (req) => {
   }
   
   try {
-    // Get the request body
+    // Get the request body and extract origin URL
     const { email, name, role, position, phone, invitedBy } = await req.json();
+    
+    // Get the origin URL from the request to use for redirects
+    const origin = new URL(req.url).origin;
+    // Set the application URL - use the request origin or fallback to localhost for development
+    const applicationUrl = origin.includes('localhost') ? origin : 'http://localhost:3000';
+    
+    console.log("Request origin:", origin);
+    console.log("Using application URL for redirects:", applicationUrl);
     
     // Check if required fields are provided
     if (!email || !name || !role) {
@@ -86,7 +94,18 @@ serve(async (req) => {
     
     try {
       if (RESEND_API_KEY) {
-        const resetLink = `${SUPABASE_URL}/auth/v1/verify?token=${authData.user.confirmation_token}&type=invite&redirect_to=${encodeURIComponent(`${new URL(req.url).origin}/reset-password`)}`;
+        // Generate reset password link using the right token and redirect URL
+        // Make sure to use the confirmation_token from authData for the password reset link
+        const resetToken = authData.user.confirmation_token;
+        
+        if (!resetToken) {
+          console.error("No confirmation token found in user data");
+        }
+        
+        // Construct the reset link with the proper token and redirect URL
+        const resetLink = `${SUPABASE_URL}/auth/v1/verify?token=${resetToken}&type=invite&redirect_to=${encodeURIComponent(`${applicationUrl}/reset-password`)}`;
+        
+        console.log("Generated reset link:", resetLink);
         
         const res = await fetch('https://api.resend.com/emails', {
           method: 'POST',

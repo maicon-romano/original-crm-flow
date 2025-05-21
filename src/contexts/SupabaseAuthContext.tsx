@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
@@ -324,18 +323,30 @@ export const SupabaseAuthProvider = ({ children }: { children: ReactNode }) => {
   
   // Update password function
   const updateUserPassword = async (newPassword: string) => {
-    if (!session?.user) {
-      throw new Error("Nenhum usuário autenticado encontrado");
-    }
-    
     try {
+      // Verifica se há uma sessão ativa
+      const { data: sessionData } = await supabase.auth.getSession();
+      
+      if (!sessionData.session) {
+        throw new Error("Nenhum usuário autenticado encontrado");
+      }
+      
+      console.log("Atualizando senha para o usuário");
+      
       const { error } = await supabase.auth.updateUser({
         password: newPassword
       });
       
       if (error) throw error;
       
-      if (user) {
+      // Procura o usuário no banco para atualizar a flag needs_password_reset
+      const { data: userData } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", sessionData.session.user.id)
+        .single();
+        
+      if (userData) {  
         // Update the needs_password_reset flag
         const { error: updateError } = await supabase
           .from("users")
@@ -343,16 +354,19 @@ export const SupabaseAuthProvider = ({ children }: { children: ReactNode }) => {
             needs_password_reset: false,
             updated_at: new Date().toISOString()
           })
-          .eq("id", user.id);
+          .eq("id", userData.id);
         
         if (updateError) {
           console.error("Error updating needs_password_reset flag:", updateError);
         }
         
-        // Update local user object
-        const updatedUser = { ...user, needs_password_reset: false };
-        setUser(updatedUser);
-        localStorage.setItem("crmUser", JSON.stringify(updatedUser));
+        // Update local user object if it exists
+        if (user && user.id === userData.id) {
+          // Update local user object
+          const updatedUser = { ...user, needs_password_reset: false };
+          setUser(updatedUser);
+          localStorage.setItem("crmUser", JSON.stringify(updatedUser));
+        }
         
         toast.success("Senha atualizada com sucesso");
       }
