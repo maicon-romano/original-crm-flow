@@ -42,6 +42,7 @@ export function MainLayout() {
         name: user.name,
         email: user.email,
         role: user.role,
+        needs_password_reset: user.needs_password_reset
       } : null, 
       loading, 
       path: location.pathname 
@@ -88,10 +89,10 @@ export function MainLayout() {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Redirect to reset password page if user needs to reset password
+  // Redirect to update password page if user needs to reset password
   if (user?.needs_password_reset) {
-    console.log("User needs password reset, redirecting");
-    return <Navigate to="/reset-password" replace />;
+    console.log("User needs password reset, redirecting to update-password");
+    return <Navigate to="/update-password" replace />;
   }
 
   // For clients on dashboard route, redirect to projects

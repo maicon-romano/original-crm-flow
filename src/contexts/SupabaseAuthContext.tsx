@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
@@ -175,16 +174,19 @@ export const SupabaseAuthProvider = ({ children }: { children: ReactNode }) => {
           lastLogin: data.last_login
         };
         
-        // Update last login time
-        const { error: updateError } = await supabase
-          .from("users")
-          .update({ 
-            last_login: new Date().toISOString() 
-          })
-          .eq("id", userId);
-        
-        if (updateError) {
-          console.error("Error updating last login:", updateError);
+        // Update last login time only if not requiring password reset
+        // This prevents resetting the last_login time when user is just checking their needs_password_reset status
+        if (!data.needs_password_reset) {
+          const { error: updateError } = await supabase
+            .from("users")
+            .update({ 
+              last_login: new Date().toISOString() 
+            })
+            .eq("id", userId);
+          
+          if (updateError) {
+            console.error("Error updating last login:", updateError);
+          }
         }
         
         setUser(currentUser);

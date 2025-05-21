@@ -10,6 +10,7 @@ import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { MainLayout } from "@/components/MainLayout";
 import Login from "@/pages/Login";
 import ResetPassword from "@/pages/ResetPassword";
+import UpdatePassword from "@/pages/UpdatePassword";
 import Dashboard from "@/pages/Dashboard";
 import Clients from "@/pages/Clients";
 import Leads from "@/pages/Leads";
@@ -54,6 +55,7 @@ const App = () => {
               {/* Public Routes */}
               <Route path="/login" element={<Login />} />
               <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/update-password" element={<UpdatePassword />} />
               
               {/* Protected Routes - MainLayout handles auth check and redirects */}
               <Route element={<MainLayout />}>
