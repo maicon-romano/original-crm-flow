@@ -72,16 +72,43 @@ const UsersPage = () => {
     }
   }, [user, navigate, toast]);
 
-  // Fetch users from Firestore
+  // Fetch users from Firestore - try both "users" and "usuarios" collections
   useEffect(() => {
     const fetchUsers = async () => {
       if (user?.role !== "admin") return;
       
       try {
         setIsLoading(true);
+        console.log("Fetching users from Firestore...");
+        
+        // Try usuarios collection first
+        const usuariosRef = collection(db, "usuarios");
+        const usuariosQuery = query(usuariosRef, orderBy("createdAt", "desc"));
+        
+        try {
+          const usuariosSnapshot = await getDocs(usuariosQuery);
+          const usuariosData: User[] = [];
+          
+          usuariosSnapshot.forEach((doc) => {
+            usuariosData.push({ ...doc.data(), id: doc.id } as User);
+          });
+          
+          console.log("Usuarios fetched:", usuariosData.length);
+          
+          if (usuariosData.length > 0) {
+            setUsers(usuariosData);
+            setIsLoading(false);
+            return;
+          }
+        } catch (error) {
+          console.error("Error fetching from usuarios collection:", error);
+        }
+        
+        // If no users in usuarios, try users collection
         const usersRef = collection(db, "users");
-        const q = query(usersRef, orderBy("createdAt", "desc"));
-        const querySnapshot = await getDocs(q);
+        const usersQuery = query(usersRef, orderBy("createdAt", "desc"));
+        
+        const querySnapshot = await getDocs(usersQuery);
         
         const usersData: User[] = [];
         querySnapshot.forEach((doc) => {
@@ -124,9 +151,33 @@ const UsersPage = () => {
     // Refetch users
     const fetchUsers = async () => {
       try {
+        // Try first from usuarios collection
+        const usuariosRef = collection(db, "usuarios");
+        const usuariosQuery = query(usuariosRef, orderBy("createdAt", "desc"));
+        
+        try {
+          const usuariosSnapshot = await getDocs(usuariosQuery);
+          const usuariosData: User[] = [];
+          
+          usuariosSnapshot.forEach((doc) => {
+            usuariosData.push({ ...doc.data(), id: doc.id } as User);
+          });
+          
+          console.log("Usuarios refetched:", usuariosData.length);
+          
+          if (usuariosData.length > 0) {
+            setUsers(usuariosData);
+            return;
+          }
+        } catch (error) {
+          console.error("Error refetching from usuarios collection:", error);
+        }
+        
+        // If no users in usuarios, try users collection
         const usersRef = collection(db, "users");
-        const q = query(usersRef, orderBy("createdAt", "desc"));
-        const querySnapshot = await getDocs(q);
+        const usersQuery = query(usersRef, orderBy("createdAt", "desc"));
+        
+        const querySnapshot = await getDocs(usersQuery);
         
         const usersData: User[] = [];
         querySnapshot.forEach((doc) => {

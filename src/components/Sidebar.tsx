@@ -70,8 +70,10 @@ export function Sidebar() {
   if (!user) return null;
 
   const isAdmin = user.role === "admin";
-  const isStaff = user.role === "admin" || user.role === "user";
-  const isClient = user.role === "client";
+  const isStaff = user.role === "admin" || user.role === "user" || user.role === "funcionario";
+  const isClient = user.role === "client" || user.role === "cliente";
+  
+  console.log("Sidebar - User role:", user.role, "isAdmin:", isAdmin);
   
   const navItems = [
     {
@@ -133,6 +135,12 @@ export function Sidebar() {
       icon: Folder,
       label: "Arquivos",
       visible: true,
+    },
+    {
+      to: "/usuarios",
+      icon: Users, 
+      label: "Usuários",
+      visible: isAdmin,
     },
     {
       to: "/calendar",

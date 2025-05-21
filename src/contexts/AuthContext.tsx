@@ -10,7 +10,7 @@ import { doc, getDoc, collection, query, where, getDocs, updateDoc } from "fireb
 import { auth, db } from "@/lib/firebase";
 
 // Define user roles
-export type UserRole = "admin" | "user" | "client" | "cliente";
+export type UserRole = "admin" | "user" | "client" | "cliente" | "funcionario";
 
 // Define user interface
 export interface User {
@@ -51,12 +51,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         try {
           // First try to get user data from Firestore
           const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
+          
+          // Buscar na coleção "usuarios" se não encontrou em "users"
+          let userData = null;
+          if (!userDoc.exists()) {
+            const usuariosDoc = await getDoc(doc(db, "usuarios", firebaseUser.uid));
+            if (usuariosDoc.exists()) {
+              userData = usuariosDoc.data();
+              console.log("User found in 'usuarios' collection:", userData);
+            }
+          } else {
+            userData = userDoc.data();
+            console.log("User found in 'users' collection:", userData);
+          }
+          
           const clientDoc = await getDoc(doc(db, "clients", firebaseUser.uid));
           
           // Check if user exists in the users collection (admin/staff)
-          if (userDoc.exists()) {
-            console.log("User found in users collection");
-            const userData = userDoc.data();
+          if (userData) {
+            console.log("User data found:", userData);
             
             const currentUser: User = {
               id: firebaseUser.uid,
@@ -69,10 +82,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               lastLogin: new Date().getTime()
             };
             
+            console.log("Processed user data:", currentUser);
+            
             // Update lastLogin time
-            await updateDoc(doc(db, "users", firebaseUser.uid), {
-              lastLogin: new Date().getTime()
-            });
+            try {
+              if (userDoc.exists()) {
+                await updateDoc(doc(db, "users", firebaseUser.uid), {
+                  lastLogin: new Date().getTime()
+                });
+              } else {
+                await updateDoc(doc(db, "usuarios", firebaseUser.uid), {
+                  lastLogin: new Date().getTime()
+                });
+              }
+            } catch (updateError) {
+              console.error("Error updating lastLogin:", updateError);
+            }
             
             setUser(currentUser);
             localStorage.setItem("crmUser", JSON.stringify(currentUser));
@@ -111,6 +136,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             const usersQuery = query(usersRef, where("email", "==", firebaseUser.email));
             const usersSnapshot = await getDocs(usersQuery);
             
+            // Try to find in usuarios collection
+            const usuariosRef = collection(db, "usuarios");
+            const usuariosQuery = query(usuariosRef, where("email", "==", firebaseUser.email));
+            const usuariosSnapshot = await getDocs(usuariosQuery);
+            
             if (!usersSnapshot.empty) {
               // User found in users collection
               const userData = usersSnapshot.docs[0].data();
@@ -135,7 +165,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               
               setUser(currentUser);
               localStorage.setItem("crmUser", JSON.stringify(currentUser));
-            } else {
+            } 
+            else if (!usuariosSnapshot.empty) {
+              // User found in usuarios collection
+              const userData = usuariosSnapshot.docs[0].data();
+              const docId = usuariosSnapshot.docs[0].id;
+              
+              const currentUser: User = {
+                id: firebaseUser.uid,
+                name: userData.name || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+                email: userData.email || firebaseUser.email || '',
+                role: userData.role as UserRole,
+                avatar: userData.avatar,
+                precisa_redefinir_senha: userData.precisa_redefinir_senha,
+                createdAt: userData.createdAt,
+                lastLogin: new Date().getTime()
+              };
+              
+              // Update the document to include the Firebase UID
+              await updateDoc(doc(db, "usuarios", docId), {
+                id: firebaseUser.uid,
+                lastLogin: new Date().getTime()
+              });
+              
+              setUser(currentUser);
+              localStorage.setItem("crmUser", JSON.stringify(currentUser));
+            }
+            else {
               // Try to find in clients collection
               const clientsRef = collection(db, "clients");
               const clientsQuery = query(clientsRef, where("email", "==", firebaseUser.email));

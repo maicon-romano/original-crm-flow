@@ -20,7 +20,8 @@ const ADMIN_ONLY_ROUTES = [
   "/financeiro",
   "/contratos",
   "/relatorios",
-  "/usuarios",
+  "/usuarios", // Corrigido para incluir a rota de usuários
+  "/users"      // Alias em inglês
 ];
 
 export function MainLayout() {
@@ -45,7 +46,8 @@ export function MainLayout() {
       }
       
       // If user is regular user and trying to access admin-only route
-      if (user.role === "user" && ADMIN_ONLY_ROUTES.some(route => location.pathname.startsWith(route))) {
+      if ((user.role === "user" || user.role === "funcionario") && 
+          ADMIN_ONLY_ROUTES.some(route => location.pathname.startsWith(route))) {
         console.log("Regular user accessing admin route, redirecting to /dashboard");
         navigate("/dashboard");
       }
@@ -92,3 +94,4 @@ export function MainLayout() {
     </div>
   );
 }
+

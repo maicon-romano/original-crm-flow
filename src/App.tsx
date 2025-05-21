@@ -44,6 +44,7 @@ const App = () => {
               <Route path="/clients" element={<Clients />} />
               <Route path="/leads" element={<Leads />} />
               <Route path="/usuarios" element={<UsersPage />} />
+              <Route path="/users" element={<UsersPage />} /> {/* Alias em inglês */}
               
               {/* Client Routes */}
               <Route path="/meus-projetos" element={<ClientProjects />} />
