@@ -38,6 +38,7 @@ const Login = () => {
         title: "Login bem-sucedido",
         description: "Você foi autenticado com sucesso.",
       });
+      // The redirect will happen automatically due to the isAuthenticated check above
     } catch (error) {
       toast({
         title: "Erro de autenticação",
