@@ -112,6 +112,80 @@ export const useClients = () => {
     }
   };
 
+  const createClient = async (clientData: Omit<Client, 'id' | 'created_at' | 'updated_at'>) => {
+    try {
+      console.log("Creating client:", clientData);
+      
+      const { data, error } = await supabase
+        .from('clients')
+        .insert({
+          ...clientData,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .select('*')
+        .single();
+      
+      if (error) {
+        console.error("Error creating client:", error);
+        throw new Error(error.message);
+      }
+      
+      // Transform the returned client data to ensure correct typing
+      const typedClient = {
+        ...data,
+        person_type: (data.person_type === "fisica" ? "fisica" : "juridica") as "juridica" | "fisica",
+        other_social_media: data.other_social_media ? data.other_social_media as Record<string, string> : undefined
+      };
+      
+      // Add the new client to the clients array
+      setClients(prevClients => [typedClient, ...prevClients]);
+      
+      return typedClient;
+    } catch (error: any) {
+      console.error("Exception creating client:", error);
+      throw new Error(error.message || "Erro ao criar cliente");
+    }
+  };
+
+  const updateClient = async (id: string, clientData: Partial<Client>) => {
+    try {
+      console.log("Updating client:", id, clientData);
+      
+      const { data, error } = await supabase
+        .from('clients')
+        .update({
+          ...clientData,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id)
+        .select('*')
+        .single();
+      
+      if (error) {
+        console.error("Error updating client:", error);
+        throw new Error(error.message);
+      }
+      
+      // Transform the returned client data to ensure correct typing
+      const typedClient = {
+        ...data,
+        person_type: (data.person_type === "fisica" ? "fisica" : "juridica") as "juridica" | "fisica",
+        other_social_media: data.other_social_media ? data.other_social_media as Record<string, string> : undefined
+      };
+      
+      // Update the client in the clients array
+      setClients(prevClients => prevClients.map(client => 
+        client.id === id ? typedClient : client
+      ));
+      
+      return typedClient;
+    } catch (error: any) {
+      console.error("Exception updating client:", error);
+      throw new Error(error.message || "Erro ao atualizar cliente");
+    }
+  };
+
   const deleteClient = async (id: string) => {
     try {
       const { error } = await supabase
@@ -142,6 +216,8 @@ export const useClients = () => {
     clients,
     isLoading,
     refreshClients: fetchClients,
+    createClient,
+    updateClient,
     deleteClient
   };
 };

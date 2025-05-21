@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -61,6 +62,7 @@ const clientFormSchema = z.object({
   // Internal organization
   contract_value: z.coerce.number().optional(),
   plan: z.string().optional(),
+  custom_plan_details: z.string().optional(),
   status: z.string().default("active"),
   client_source: z.string().optional(),
   
@@ -131,6 +133,7 @@ export function ClientForm({ onComplete, client }: ClientFormProps) {
     website_development: false,
     contract_value: undefined,
     plan: "",
+    custom_plan_details: "",
     notes: "",
     contract_start: undefined,
     contract_end: undefined,
@@ -151,6 +154,9 @@ export function ClientForm({ onComplete, client }: ClientFormProps) {
   // Watch the person_type field to apply conditional validation
   const personType = form.watch("person_type");
   
+  // Watch the plan field to show/hide custom plan details
+  const selectedPlan = form.watch("plan");
+  
   // Effect to handle person_type change and update validations
   useEffect(() => {
     form.trigger();
@@ -161,6 +167,8 @@ export function ClientForm({ onComplete, client }: ClientFormProps) {
     setIsSubmitting(true);
     
     try {
+      console.log("Submitting client form data:", data);
+      
       // If we're editing an existing client
       if (isEditing && client) {
         const { error } = await supabase
@@ -198,7 +206,7 @@ export function ClientForm({ onComplete, client }: ClientFormProps) {
             website_development: data.website_development,
             contract_value: data.contract_value,
             plan: data.plan,
-            notes: data.notes,
+            notes: data.plan === "personalizado" ? data.custom_plan_details : data.notes,
             contract_start: data.contract_start?.toISOString(),
             contract_end: data.contract_end?.toISOString(),
             updated_at: new Date().toISOString(),
@@ -208,6 +216,7 @@ export function ClientForm({ onComplete, client }: ClientFormProps) {
         if (error) throw error;
         
         toast.success("Cliente atualizado com sucesso!");
+        onComplete();
       } 
       // If we're creating a new client
       else {
@@ -246,7 +255,7 @@ export function ClientForm({ onComplete, client }: ClientFormProps) {
             website_development: data.website_development,
             contract_value: data.contract_value,
             plan: data.plan,
-            notes: data.notes,
+            notes: data.plan === "personalizado" ? data.custom_plan_details : data.notes,
             contract_start: data.contract_start?.toISOString(),
             contract_end: data.contract_end?.toISOString(),
             created_at: new Date().toISOString(),
@@ -255,7 +264,12 @@ export function ClientForm({ onComplete, client }: ClientFormProps) {
           .select('*')
           .single();
         
-        if (error) throw error;
+        if (error) {
+          console.error("Error creating client:", error);
+          throw error;
+        }
+        
+        console.log("Client created successfully:", clientData);
         
         // Create Google Drive folders for the new client
         if (clientData) {
@@ -301,18 +315,21 @@ export function ClientForm({ onComplete, client }: ClientFormProps) {
                 toast.error("Erro ao enviar convite para o cliente");
               }
             }
+            
+            onComplete();
           } catch (folderError) {
             console.error("Exception creating Drive folders:", folderError);
             toast.error("Cliente criado, mas ocorreu um erro ao criar as pastas no Google Drive.");
+            onComplete();
           }
+        } else {
+          toast.success("Cliente criado com sucesso!");
+          onComplete();
         }
       }
-      
-      onComplete();
     } catch (error: any) {
       console.error("Error submitting client form:", error);
       toast.error(error.message || "Erro ao salvar cliente");
-    } finally {
       setIsSubmitting(false);
     }
   };
@@ -741,6 +758,26 @@ export function ClientForm({ onComplete, client }: ClientFormProps) {
                   </FormItem>
                 )}
               />
+              
+              {selectedPlan === "personalizado" && (
+                <FormField
+                  control={form.control}
+                  name="custom_plan_details"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Detalhes do plano personalizado</FormLabel>
+                      <FormControl>
+                        <Textarea 
+                          placeholder="Descreva os detalhes do plano personalizado" 
+                          className="min-h-[100px]"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
               
               <FormField
                 control={form.control}
