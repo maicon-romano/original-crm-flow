@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -94,7 +93,23 @@ export function ClientForm({ onComplete, client }: ClientFormProps) {
         const { error } = await supabase
           .from('clients')
           .update({
-            ...data,
+            company_name: data.company_name,
+            contact_name: data.contact_name,
+            email: data.email,
+            phone: data.phone,
+            address: data.address,
+            city: data.city,
+            state: data.state,
+            tax_id: data.tax_id,
+            status: data.status,
+            instagram: data.instagram,
+            website: data.website,
+            social_media: data.social_media,
+            paid_traffic: data.paid_traffic,
+            website_development: data.website_development,
+            contract_value: data.contract_value,
+            contract_start: data.contract_start?.toISOString(),
+            contract_end: data.contract_end?.toISOString(),
             updated_at: new Date().toISOString(),
           })
           .eq('id', client.id);
@@ -108,7 +123,23 @@ export function ClientForm({ onComplete, client }: ClientFormProps) {
         const { data: clientData, error } = await supabase
           .from('clients')
           .insert({
-            ...data,
+            company_name: data.company_name,
+            contact_name: data.contact_name,
+            email: data.email,
+            phone: data.phone,
+            address: data.address,
+            city: data.city,
+            state: data.state,
+            tax_id: data.tax_id,
+            status: data.status,
+            instagram: data.instagram,
+            website: data.website,
+            social_media: data.social_media,
+            paid_traffic: data.paid_traffic,
+            website_development: data.website_development,
+            contract_value: data.contract_value,
+            contract_start: data.contract_start?.toISOString(),
+            contract_end: data.contract_end?.toISOString(),
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           })

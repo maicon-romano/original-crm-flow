@@ -158,7 +158,7 @@ export function ClientsList({ clients, isLoading, onRefresh, onDelete }: Clients
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={client.status === 'active' ? 'success' : 'secondary'}>
+                    <Badge variant={client.status === 'active' ? 'default' : 'secondary'}>
                       {client.status === 'active' ? 'Ativo' : 'Inativo'}
                     </Badge>
                   </TableCell>
