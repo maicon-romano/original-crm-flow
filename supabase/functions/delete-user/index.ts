@@ -23,7 +23,6 @@ serve(async (req) => {
     // Get the request body
     const { userId } = await req.json();
     
-    // Check if userId is provided
     if (!userId) {
       return new Response(
         JSON.stringify({ error: 'User ID is required' }),
@@ -37,29 +36,24 @@ serve(async (req) => {
     // Initialize Supabase client with service role (admin) privileges
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     
-    try {
-      // First try to delete the user from the public.users table
-      // This might fail due to RLS policies, but we'll continue anyway
-      const { error: dbError } = await supabase
-        .from('users')
-        .delete()
-        .eq('id', userId);
-      
-      if (dbError) {
-        console.error("Error deleting from users table:", dbError);
-        // Continue anyway, we'll try to delete from auth
-      }
-    } catch (dbErr) {
-      console.error("Exception deleting from users table:", dbErr);
-      // Continue anyway
+    // First, delete the user from the users table
+    const { error: deleteUserError } = await supabase
+      .from('users')
+      .delete()
+      .eq('id', userId);
+    
+    if (deleteUserError) {
+      throw deleteUserError;
     }
     
-    // Delete the user from auth.users
-    const { error } = await supabase.auth.admin.deleteUser(userId);
+    // Then, delete the user from auth.users (requires admin key)
+    const { error: deleteAuthError } = await supabase.auth.admin.deleteUser(
+      userId
+    );
     
-    if (error) {
-      console.error("Error deleting user from auth:", error);
-      throw error;
+    if (deleteAuthError) {
+      console.error("Error deleting auth user:", deleteAuthError);
+      // Continue anyway, as the user record was already removed
     }
     
     return new Response(

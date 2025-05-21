@@ -26,7 +26,7 @@ export const useUsers = () => {
   const dataFetchedRef = useRef(false);
 
   const fetchUsers = useCallback(async (showToast = true) => {
-    if (!isMounted.current || !user?.role || dataFetchedRef.current) return;
+    if (!isMounted.current || !user?.role) return;
     
     const isAdmin = user?.role === "admin";
     if (!isAdmin) {
@@ -34,36 +34,32 @@ export const useUsers = () => {
       return;
     }
     
+    // If data is already fetched and we're not forcing a refresh with showToast=true, skip
+    if (dataFetchedRef.current && !showToast) {
+      return;
+    }
+    
     try {
       setIsLoading(true);
       console.log("Fetching users from Supabase...");
+      
       if (showToast) {
         toast.info("Carregando usuários...");
       }
       
-      // Use rpc call to avoid RLS recursion
+      // Use rpc call to get_all_users to avoid RLS recursion
       const { data, error } = await supabase.rpc('get_all_users');
       
       if (error) {
         console.error("RPC error:", error);
         
-        // Fallback to direct query if RPC fails - with proper error handling
-        try {
-          const { data: directData, error: directError } = await supabase
-            .from("users")
-            .select("*")
-            .order("created_at", { ascending: false });
-          
-          if (directError) throw directError;
-          
-          if (isMounted.current) {
-            setUsers(directData || []);
-            dataFetchedRef.current = true;
-          }
-        } catch (queryErr) {
-          console.error("Direct query error:", queryErr);
-          // Set an empty array as fallback
+        // Set an empty array as fallback
+        if (isMounted.current) {
           setUsers([]);
+        }
+        
+        if (isMounted.current && showToast) {
+          toast.error("Erro ao carregar usuários. Verifique suas permissões.");
         }
       } else {
         console.log("Users data from RPC:", data);
@@ -72,10 +68,10 @@ export const useUsers = () => {
           setUsers(data as User[]);
           dataFetchedRef.current = true;
         }
-      }
-      
-      if (isMounted.current && showToast) {
-        toast.success(`${data?.length || 0} usuários carregados!`);
+        
+        if (isMounted.current && showToast) {
+          toast.success(`${data?.length || 0} usuários carregados!`);
+        }
       }
     } catch (error: any) {
       console.error("Error fetching users:", error);
@@ -85,7 +81,9 @@ export const useUsers = () => {
       }
       
       // Set an empty array if fetch fails
-      setUsers([]);
+      if (isMounted.current) {
+        setUsers([]);
+      }
     } finally {
       if (isMounted.current) {
         setIsLoading(false);
@@ -96,7 +94,7 @@ export const useUsers = () => {
   // Explicitly refresh users data when called
   const refreshUsers = useCallback(() => {
     dataFetchedRef.current = false;
-    fetchUsers();
+    fetchUsers(true);
   }, [fetchUsers]);
 
   // Cleanup function to prevent state updates on unmounted component

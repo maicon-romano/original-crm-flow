@@ -37,22 +37,35 @@ serve(async (req) => {
     // Initialize Supabase client with service role (admin) privileges
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     
-    // Update user profile
-    const { error } = await supabase
-      .from('users')
-      .update({
-        name,
-        email,
-        phone,
-        position,
-        role,
-        active,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', id);
+    // Use the RPC function to update the user safely
+    const { error } = await supabase.rpc('update_user', {
+      user_id: id,
+      user_name: name,
+      user_email: email,
+      user_phone: phone || null,
+      user_position: position || null,
+      user_role: role,
+      user_active: active
+    });
     
     if (error) {
-      throw error;
+      console.error("RPC error:", error);
+      
+      // Fallback to direct update if RPC fails
+      const { error: directError } = await supabase
+        .from('users')
+        .update({
+          name,
+          email,
+          phone,
+          position,
+          role,
+          active,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id);
+      
+      if (directError) throw directError;
     }
     
     return new Response(

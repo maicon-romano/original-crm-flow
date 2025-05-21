@@ -23,7 +23,7 @@ const UsersPage = () => {
     user.position?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Check if current user is admin
+  // Check if current user is admin - only run this check once when the component mounts
   useEffect(() => {
     const isAdmin = user?.role === "admin";
     console.log("UsersPage - Checking admin permission:", { 
@@ -39,7 +39,7 @@ const UsersPage = () => {
       });
       navigate("/dashboard");
     }
-  }, [user, navigate, toast]);
+  }, [user?.id, navigate, toast]); // Only depend on user.id to prevent re-running on every change
 
   // If user is not admin, show loading or redirect
   if (user && user.role !== 'admin') {

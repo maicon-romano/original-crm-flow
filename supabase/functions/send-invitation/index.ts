@@ -4,211 +4,157 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') || '';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Handle CORS preflight requests
-async function handleCors(req: Request) {
+serve(async (req) => {
+  // CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, {
       headers: corsHeaders,
       status: 204,
     });
   }
-}
-
-// Generate a temporary password
-function generateRandomPassword(length = 12) {
-  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()';
-  let result = '';
-  const charactersLength = characters.length;
-  
-  for (let i = 0; i < length; i++) {
-    result += characters.charAt(Math.floor(Math.random() * charactersLength));
-  }
-  
-  return result;
-}
-
-// Send invitation email via RESEND API
-async function sendInvitationEmail(to: string, name: string, temporaryPassword: string, invitedBy: any) {
-  try {
-    const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
-    
-    if (!RESEND_API_KEY) {
-      throw new Error("RESEND_API_KEY is not defined");
-    }
-    
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${RESEND_API_KEY}`,
-      },
-      body: JSON.stringify({
-        from: 'Original Digital <sistema@originaldigital.com.br>',
-        to: [to],
-        subject: 'Bem-vindo ao CRM da Original Digital',
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <h2 style="color: #3b82f6;">Bem-vindo ao CRM da Original Digital!</h2>
-            <p>Olá <strong>${name}</strong>,</p>
-            <p>Você foi convidado por <strong>${invitedBy.name}</strong> para acessar o CRM da Original Digital.</p>
-            <p>Por favor, utilize as credenciais abaixo para fazer login:</p>
-            <div style="background-color: #f3f4f6; padding: 15px; border-radius: 5px; margin: 20px 0;">
-              <p><strong>Email:</strong> ${to}</p>
-              <p><strong>Senha temporária:</strong> ${temporaryPassword}</p>
-            </div>
-            <p style="margin-bottom: 30px;">Na primeira vez que você acessar, será solicitado que você crie uma nova senha.</p>
-            <a href="${SUPABASE_URL.replace('.supabase.co', '')}" style="background-color: #3b82f6; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Acessar CRM</a>
-            <p style="margin-top: 30px; color: #6b7280; font-size: 12px;">
-              Se você não esperava este email, por favor ignore-o ou entre em contato com o administrador do sistema.
-            </p>
-          </div>
-        `,
-      }),
-    });
-    
-    const data = await res.json();
-    
-    if (!res.ok) {
-      throw new Error(data.message || 'Failed to send email');
-    }
-    
-    console.log("Email sent successfully:", data);
-    return data;
-  } catch (error) {
-    console.error("Error sending email:", error);
-    throw error;
-  }
-}
-
-serve(async (req) => {
-  // Handle CORS
-  const corsResponse = await handleCors(req);
-  if (corsResponse) return corsResponse;
   
   try {
-    if (req.method !== 'POST') {
-      return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-        status: 405,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // Get request body
+    // Get the request body
     const { email, name, role, position, phone, invitedBy } = await req.json();
     
-    // Validate required fields
+    // Check if required fields are provided
     if (!email || !name || !role) {
-      return new Response(JSON.stringify({ success: false, error: 'Missing required fields' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ error: 'Required fields missing' }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 400,
+        }
+      );
     }
-
-    // Initialize Supabase client with admin privileges
+    
+    // Initialize Supabase client with service role privileges
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     
-    try {
-      // Check if user already exists - handle errors gracefully
-      const { data: existingUser, error: checkError } = await supabase
-        .from('users')
-        .select('id, email')
-        .eq('email', email)
-        .maybeSingle();
-        
-      if (checkError) {
-        console.error("Error checking existing user:", checkError);
-        // Continue anyway - might just be an RLS issue
-      }
-      
-      if (existingUser) {
-        return new Response(JSON.stringify({ 
-          success: false, 
-          error: 'Este email já está em uso no sistema' 
-        }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-    } catch (checkErr) {
-      console.error("Error in user existence check:", checkErr);
-      // Continue anyway - don't let this block the function
-    }
-    
-    // Generate temporary password
-    const temporaryPassword = generateRandomPassword(12);
+    // Generate a random password for the new user
+    const tempPassword = Math.random().toString(36).slice(-10);
     
     // Create the user in Supabase Auth
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
       email,
-      password: temporaryPassword,
+      password: tempPassword,
       email_confirm: true,
-      user_metadata: {
-        name,
-        role,
-      },
+      user_metadata: { name },
     });
     
     if (authError) {
-      throw new Error(authError.message);
+      throw authError;
     }
     
+    if (!authData.user) {
+      throw new Error("Failed to create user");
+    }
+    
+    // Create user profile in the public.users table
     try {
-      // Insert user data with error handling
-      const { error: userError } = await supabase
+      const { error: profileError } = await supabase
         .from('users')
-        .insert([{
-          id: authData.user.id,
-          email: email,
-          name: name,
-          role: role,
-          position: position || null,
-          phone: phone || null,
-          active: true,
-          needs_password_reset: true,
-        }]);
-        
-      if (userError) {
-        console.error("Error inserting user profile:", userError);
-        // Continue anyway - we've already created the auth user
+        .insert([
+          {
+            id: authData.user.id,
+            name,
+            email,
+            phone,
+            position,
+            role,
+            active: true,
+            needs_password_reset: true,
+          }
+        ]);
+      
+      if (profileError) {
+        console.error("Error inserting user profile:", profileError);
       }
-    } catch (insertErr) {
-      console.error("Exception in user profile creation:", insertErr);
-      // Continue anyway - we've already created the auth user
+    } catch (profileErr) {
+      console.error("Exception inserting user profile:", profileErr);
     }
     
-    // Send invitation email
+    // Send invitation email with Resend
+    let emailStatus = { success: true, id: "email-not-sent" };
+    
     try {
-      await sendInvitationEmail(email, name, temporaryPassword, invitedBy);
+      if (RESEND_API_KEY) {
+        const resetLink = `${SUPABASE_URL}/auth/v1/verify?token=${authData.user.confirmation_token}&type=invite&redirect_to=${encodeURIComponent(`${new URL(req.url).origin}/reset-password`)}`;
+        
+        const res = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${RESEND_API_KEY}`
+          },
+          body: JSON.stringify({
+            from: 'Original Digital <notificacoes@originaldigital.com.br>',
+            to: email,
+            subject: 'Convite para o CRM Original Digital',
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2>Olá ${name},</h2>
+                <p>Você foi convidado por ${invitedBy?.name || 'um administrador'} para acessar o CRM da Original Digital.</p>
+                
+                <p>Para completar seu cadastro e definir sua senha, clique no botão abaixo:</p>
+                
+                <div style="text-align: center; margin: 30px 0;">
+                  <a href="${resetLink}" style="background-color: #111827; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold;">
+                    Completar Cadastro
+                  </a>
+                </div>
+                
+                <p>Se o botão não funcionar, você pode copiar e colar o link abaixo no seu navegador:</p>
+                <p style="word-break: break-all; font-size: 12px; color: #666;">${resetLink}</p>
+                
+                <p>Esse link é válido por 24 horas. Caso expire, solicite um novo convite.</p>
+                
+                <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #666;">
+                  <p>Original Digital 2025 - Todos os direitos reservados.</p>
+                </div>
+              </div>
+            `
+          })
+        });
+        
+        emailStatus = await res.json();
+        console.log("Email sent successfully:", emailStatus);
+      }
     } catch (emailErr) {
-      console.error("Email sending failed, but user was created:", emailErr);
-      // Continue anyway, we've created the user
+      console.error("Error sending email:", emailErr);
     }
     
     return new Response(
       JSON.stringify({ 
         success: true, 
         message: 'User invited successfully',
-        user: { id: authData.user.id, email, name, role }  
+        email: emailStatus
       }),
       {
-        status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
       }
     );
-  } catch (error: any) {
-    console.error("Error processing invitation:", error);
+  } catch (error) {
+    console.error('Error sending invitation:', error);
+    
+    let errorMessage = 'Failed to send invitation';
+    if (error.message?.includes('already been registered')) {
+      errorMessage = 'Email already taken';
+    }
     
     return new Response(
-      JSON.stringify({ success: false, error: error.message || 'An error occurred' }),
+      JSON.stringify({ success: false, error: errorMessage }),
       {
-        status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 500,
       }
     );
   }

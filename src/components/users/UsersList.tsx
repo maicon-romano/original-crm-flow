@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { 
   Table, 
@@ -107,15 +108,15 @@ export const UsersList = ({ users, isLoading, onRefresh }: UsersListProps) => {
       }
       
       // Call the Edge Function to delete the user
-      const { error: authDeleteError } = await supabase.functions.invoke("delete-user", {
+      const { error } = await supabase.functions.invoke("delete-user", {
         body: {
           userId: userToDelete.id,
         }
       });
       
-      if (authDeleteError) {
-        console.error("Error deleting user:", authDeleteError);
-        throw authDeleteError;
+      if (error) {
+        console.error("Error deleting user:", error);
+        throw error;
       }
       
       toast.success(`Usuário ${userToDelete.name} excluído com sucesso`);

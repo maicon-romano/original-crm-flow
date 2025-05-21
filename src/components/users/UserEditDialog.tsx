@@ -60,35 +60,20 @@ export const UserEditDialog = ({ user, onComplete }: UserEditDialogProps) => {
     try {
       setIsSubmitting(true);
       
-      // Try using RPC call to update user to avoid RLS issues
-      const { error: rpcError } = await supabase.rpc('update_user', {
-        user_id: user.id,
-        user_name: data.name,
-        user_email: data.email,
-        user_phone: data.phone || null,
-        user_position: data.position || null,
-        user_role: data.role,
-        user_active: data.active,
+      // Use the Edge Function to update the user
+      const { error } = await supabase.functions.invoke("update-user", {
+        body: {
+          id: user.id,
+          name: data.name,
+          email: data.email,
+          phone: data.phone || null,
+          position: data.position || null,
+          role: data.role,
+          active: data.active
+        }
       });
       
-      if (rpcError) {
-        console.error("RPC error updating user:", rpcError);
-        // Fall back to direct update
-        
-        const { error } = await supabase.functions.invoke("update-user", {
-          body: {
-            id: user.id,
-            name: data.name,
-            email: data.email,
-            phone: data.phone || null,
-            position: data.position || null,
-            role: data.role,
-            active: data.active
-          }
-        });
-        
-        if (error) throw error;
-      }
+      if (error) throw error;
       
       toast.success("Usuário atualizado com sucesso");
       onComplete();
