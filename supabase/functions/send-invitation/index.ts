@@ -1,180 +1,197 @@
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+// Follow this setup guide to integrate the Deno runtime into your project:
+// https://docs.supabase.com/guides/functions/deno-runtime#using-typescript
 
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') || '';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4'
+import { corsHeaders } from '../_shared/cors.ts'
+import { SmtpClient } from "https://deno.land/x/denomailer/mod.ts";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
-serve(async (req) => {
-  // CORS preflight
+Deno.serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      headers: corsHeaders,
-      status: 204,
-    });
+    return new Response(null, { headers: corsHeaders })
   }
-  
+
   try {
-    // Get the request body and extract origin URL
-    const { email, name, role, position, phone, invitedBy } = await req.json();
+    // Get request origin to set proper redirect URL
+    const originHeader = req.headers.get('origin') || '';
+    console.log("Request origin:", originHeader);
     
-    // Get the origin URL from the request to use for redirects
-    const origin = new URL(req.url).origin;
-    // Set the application URL - use the request origin or fallback to localhost for development
-    const applicationUrl = origin.includes('localhost') ? origin : 'http://localhost:3000';
+    // Determine application URL for redirects
+    let applicationUrl = 'http://localhost:3000';
+    if (originHeader && !originHeader.includes('localhost')) {
+      applicationUrl = originHeader;
+    }
     
-    console.log("Request origin:", origin);
     console.log("Using application URL for redirects:", applicationUrl);
     
-    // Check if required fields are provided
-    if (!email || !name || !role) {
+    // Get request body
+    const { email, name, company, password } = await req.json();
+    
+    if (!email) {
       return new Response(
-        JSON.stringify({ error: 'Required fields missing' }),
-        {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 400,
-        }
-      );
+        JSON.stringify({ error: 'Email é obrigatório' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      )
     }
     
-    // Initialize Supabase client with service role privileges
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    // Initialize Supabase client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') as string;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') as string;
+    const supabase = createClient(supabaseUrl, supabaseKey);
     
-    // Generate a random password for the new user
-    const tempPassword = Math.random().toString(36).slice(-10);
+    // Get user data to retrieve confirmation token
+    const { data: { users }, error: usersError } = await supabase.auth.admin.listUsers();
     
-    // Create the user in Supabase Auth
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-      email,
-      password: tempPassword,
-      email_confirm: true,
-      user_metadata: { name },
-    });
-    
-    if (authError) {
-      throw authError;
+    if (usersError) {
+      throw usersError;
     }
     
-    if (!authData.user) {
-      throw new Error("Failed to create user");
+    const user = users.find(u => u.email === email);
+    
+    if (!user) {
+      throw new Error(`Usuário não encontrado: ${email}`);
     }
     
-    // Create user profile in the public.users table
-    try {
-      const { error: profileError } = await supabase
-        .from('users')
-        .insert([
-          {
-            id: authData.user.id,
-            name,
-            email,
-            phone,
-            position,
-            role,
-            active: true,
-            needs_password_reset: true,
-          }
-        ]);
-      
-      if (profileError) {
-        console.error("Error inserting user profile:", profileError);
-      }
-    } catch (profileErr) {
-      console.error("Exception inserting user profile:", profileErr);
+    // Get email API key
+    const emailApiKey = Deno.env.get('RESEND_API_KEY');
+    
+    if (!emailApiKey) {
+      throw new Error('API Key de email não configurada');
     }
     
-    // Send invitation email with Resend
-    let emailStatus = { success: true, id: "email-not-sent" };
+    // Create reset link
+    const resetLink = `${applicationUrl}/reset-password`;
+    console.log("Generated reset link:", resetLink);
     
-    try {
-      if (RESEND_API_KEY) {
-        // Generate reset password link using the right token and redirect URL
-        // Make sure to use the confirmation_token from authData for the password reset link
-        const resetToken = authData.user.confirmation_token;
-        
-        if (!resetToken) {
-          console.error("No confirmation token found in user data");
-        }
-        
-        // Construct the reset link with the proper token and redirect URL
-        const resetLink = `${SUPABASE_URL}/auth/v1/verify?token=${resetToken}&type=invite&redirect_to=${encodeURIComponent(`${applicationUrl}/reset-password`)}`;
-        
-        console.log("Generated reset link:", resetLink);
-        
-        const res = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${RESEND_API_KEY}`
-          },
-          body: JSON.stringify({
-            from: 'Original Digital <notificacoes@originaldigital.com.br>',
-            to: email,
-            subject: 'Convite para o CRM Original Digital',
-            html: `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2>Olá ${name},</h2>
-                <p>Você foi convidado por ${invitedBy?.name || 'um administrador'} para acessar o CRM da Original Digital.</p>
-                
-                <p>Para completar seu cadastro e definir sua senha, clique no botão abaixo:</p>
-                
-                <div style="text-align: center; margin: 30px 0;">
-                  <a href="${resetLink}" style="background-color: #111827; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold;">
-                    Completar Cadastro
-                  </a>
-                </div>
-                
-                <p>Se o botão não funcionar, você pode copiar e colar o link abaixo no seu navegador:</p>
-                <p style="word-break: break-all; font-size: 12px; color: #666;">${resetLink}</p>
-                
-                <p>Esse link é válido por 24 horas. Caso expire, solicite um novo convite.</p>
-                
-                <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #666;">
-                  <p>Original Digital 2025 - Todos os direitos reservados.</p>
-                </div>
-              </div>
-            `
+    // Update user data with temporary password if provided
+    if (password) {
+      try {
+        const { error: updateError } = await supabase
+          .from('users')
+          .update({
+            needs_password_reset: true
           })
-        });
-        
-        emailStatus = await res.json();
-        console.log("Email sent successfully:", emailStatus);
+          .eq('email', email);
+          
+        if (updateError) {
+          console.error("Error updating user profile:", updateError);
+        }
+      } catch (err) {
+        console.error("Error inserting user profile:", err);
       }
-    } catch (emailErr) {
-      console.error("Error sending email:", emailErr);
     }
+
+    // Send email
+    const client = new SmtpClient();
+
+    await client.connect({
+      hostname: "smtp.resend.com",
+      port: 465,
+      username: "resend",
+      password: emailApiKey,
+    });
+
+    const messageContent = `
+      <html>
+        <head>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              line-height: 1.6;
+              color: #333;
+              max-width: 600px;
+              margin: 0 auto;
+            }
+            .container {
+              padding: 20px;
+            }
+            .header {
+              background-color: #4f46e5;
+              color: white;
+              padding: 20px;
+              text-align: center;
+            }
+            .content {
+              padding: 20px;
+              background-color: #f9fafb;
+            }
+            .footer {
+              text-align: center;
+              margin-top: 20px;
+              font-size: 12px;
+              color: #6b7280;
+            }
+            .button {
+              display: inline-block;
+              background-color: #4f46e5;
+              color: white;
+              padding: 10px 20px;
+              text-decoration: none;
+              border-radius: 5px;
+              margin-top: 15px;
+            }
+            .credentials {
+              background-color: #f1f5f9;
+              padding: 15px;
+              border-left: 4px solid #4f46e5;
+              margin: 15px 0;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Bem-vindo ao CRM da Original Digital</h1>
+            </div>
+            <div class="content">
+              <p>Olá ${name},</p>
+              <p>Sua conta no CRM da Original Digital foi criada com sucesso!</p>
+              
+              <p>Você pode acessar o sistema com as seguintes credenciais:</p>
+              
+              <div class="credentials">
+                <p><strong>Email:</strong> ${email}</p>
+                <p><strong>Senha temporária:</strong> ${password}</p>
+              </div>
+              
+              <p>Por motivos de segurança, você será solicitado a alterar sua senha no primeiro acesso.</p>
+              
+              <p>Para acessar o sistema, clique no botão abaixo:</p>
+              
+              <a href="${resetLink}" class="button">Acessar Sistema</a>
+            </div>
+            
+            <div class="footer">
+              <p>© ${new Date().getFullYear()} Original Digital. Todos os direitos reservados.</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const info = await client.send({
+      from: "CRM Original Digital <crm@originaldigital.com.br>",
+      to: email,
+      subject: "Bem-vindo ao CRM da Original Digital",
+      content: messageContent,
+      html: messageContent,
+    });
+
+    await client.close();
     
+    console.log("Email sent successfully:", info);
+
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        message: 'User invited successfully',
-        email: emailStatus
-      }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
-      }
-    );
+      JSON.stringify({ success: true }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
   } catch (error) {
-    console.error('Error sending invitation:', error);
-    
-    let errorMessage = 'Failed to send invitation';
-    if (error.message?.includes('already been registered')) {
-      errorMessage = 'Email already taken';
-    }
+    console.error("Error sending invitation:", error);
     
     return new Response(
-      JSON.stringify({ success: false, error: errorMessage }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500,
-      }
-    );
+      JSON.stringify({ error: error.message || 'Erro ao enviar convite' }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+    )
   }
-});
+})

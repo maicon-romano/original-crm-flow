@@ -2,59 +2,79 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useToast } from "@/components/ui/use-toast";
-import { createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc, serverTimestamp, collection } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { generateTemporaryPassword } from "@/lib/utils";
+import { Checkbox } from "@/components/ui/checkbox";
 
 // Form schema for validation
 const clientFormSchema = z.object({
-  companyName: z.string().min(1, "Nome da empresa é obrigatório"),
-  contactName: z.string().min(1, "Nome do contato é obrigatório"),
-  cnpjCpf: z.string().min(1, "CNPJ/CPF é obrigatório"),
+  company_name: z.string().min(1, "Nome da empresa é obrigatório"),
+  contact_name: z.string().min(1, "Nome do contato é obrigatório"),
+  tax_id: z.string().optional(),
   email: z.string().email("Email inválido").min(1, "Email é obrigatório"),
-  phone: z.string().min(1, "Telefone é obrigatório"),
+  phone: z.string().optional(),
   address: z.string().optional(),
   city: z.string().optional(),
   state: z.string().optional(),
   instagram: z.string().optional(),
   website: z.string().optional(),
-  contractValue: z.string().optional(),
-  contractStart: z.string().optional(),
-  contractEnd: z.string().optional(),
+  contract_value: z.string().optional(),
+  contract_start: z.string().optional(),
+  contract_end: z.string().optional(),
   description: z.string().optional(),
   status: z.string().default("active"),
-  createAccess: z.boolean().default(true),
+  create_access: z.boolean().default(true),
+  social_media: z.boolean().default(false),
+  paid_traffic: z.boolean().default(false),
+  website_development: z.boolean().default(false),
 });
 
 type ClientFormValues = z.infer<typeof clientFormSchema>;
 
 interface ClientFormProps {
   onComplete: () => void;
-  client?: any; // For editing in the future
+  client?: any; // For editing existing client
 }
 
 export const ClientForm = ({ onComplete, client }: ClientFormProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { toast } = useToast();
+  const isEditing = !!client;
 
   // Initialize form
   const form = useForm<ClientFormValues>({
     resolver: zodResolver(clientFormSchema),
-    defaultValues: client || {
-      companyName: "",
-      contactName: "",
-      cnpjCpf: "",
+    defaultValues: client ? {
+      company_name: client.company_name || "",
+      contact_name: client.contact_name || "",
+      tax_id: client.tax_id || "",
+      email: client.email || "",
+      phone: client.phone || "",
+      address: client.address || "",
+      city: client.city || "",
+      state: client.state || "",
+      instagram: client.instagram || "",
+      website: client.website || "",
+      contract_value: client.contract_value?.toString() || "",
+      contract_start: client.contract_start || "",
+      contract_end: client.contract_end || "",
+      description: client.description || "",
+      status: client.status || "active",
+      create_access: !!client.user_id,
+      social_media: !!client.social_media,
+      paid_traffic: !!client.paid_traffic,
+      website_development: !!client.website_development,
+    } : {
+      company_name: "",
+      contact_name: "",
+      tax_id: "",
       email: "",
       phone: "",
       address: "",
@@ -62,90 +82,163 @@ export const ClientForm = ({ onComplete, client }: ClientFormProps) => {
       state: "",
       instagram: "",
       website: "",
-      contractValue: "",
-      contractStart: "",
-      contractEnd: "",
+      contract_value: "",
+      contract_start: "",
+      contract_end: "",
       description: "",
       status: "active",
-      createAccess: true,
+      create_access: true,
+      social_media: false,
+      paid_traffic: false,
+      website_development: false,
     },
   });
+
+  const createDriveFolders = async (clientId: string, clientData: any) => {
+    try {
+      const { data, error } = await supabase.functions.invoke('create-drive-folders', {
+        body: { 
+          client: {
+            id: clientId,
+            company_name: clientData.company_name,
+            email: clientData.email
+          }
+        }
+      });
+
+      if (error) {
+        console.error("Error creating Drive folders:", error);
+        toast.error("Erro ao criar pastas no Google Drive");
+        return false;
+      }
+
+      console.log("Drive folders created:", data);
+      toast.success("Pastas criadas no Google Drive");
+      return true;
+    } catch (error) {
+      console.error("Exception creating Drive folders:", error);
+      toast.error("Erro ao criar pastas no Google Drive");
+      return false;
+    }
+  };
 
   const handleSubmit = async (data: ClientFormValues) => {
     try {
       setIsSubmitting(true);
       
-      // Generate temporary password for client access
-      const tempPassword = generateTemporaryPassword();
-      
-      if (data.createAccess) {
-        try {
-          // Create firebase auth user
-          const userCredential = await createUserWithEmailAndPassword(auth, data.email, tempPassword);
-          const uid = userCredential.user.uid;
+      if (isEditing) {
+        // Update existing client
+        const { error } = await supabase
+          .from('clients')
+          .update({
+            company_name: data.company_name,
+            contact_name: data.contact_name,
+            tax_id: data.tax_id,
+            email: data.email,
+            phone: data.phone,
+            address: data.address,
+            city: data.city,
+            state: data.state,
+            instagram: data.instagram,
+            website: data.website,
+            contract_value: data.contract_value ? parseFloat(data.contract_value) : null,
+            contract_start: data.contract_start || null,
+            contract_end: data.contract_end || null,
+            description: data.description,
+            status: data.status,
+            social_media: data.social_media,
+            paid_traffic: data.paid_traffic,
+            website_development: data.website_development,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', client.id);
+        
+        if (error) {
+          throw error;
+        }
+
+        toast.success("Cliente atualizado com sucesso");
+        onComplete();
+      } else {
+        // Create new client
+        const { data: newClient, error } = await supabase
+          .from('clients')
+          .insert({
+            company_name: data.company_name,
+            contact_name: data.contact_name,
+            tax_id: data.tax_id,
+            email: data.email,
+            phone: data.phone,
+            address: data.address,
+            city: data.city,
+            state: data.state,
+            instagram: data.instagram,
+            website: data.website,
+            contract_value: data.contract_value ? parseFloat(data.contract_value) : null,
+            contract_start: data.contract_start || null,
+            contract_end: data.contract_end || null,
+            description: data.description,
+            status: data.status,
+            social_media: data.social_media,
+            paid_traffic: data.paid_traffic,
+            website_development: data.website_development
+          })
+          .select()
+          .single();
           
-          // Create client document with auth UID
-          await setDoc(doc(db, "clients", uid), {
-            ...data,
-            role: "cliente", // Portuguese for consistency
-            userType: "client",
-            precisa_redefinir_senha: true,
-            lastTempPassword: tempPassword,
-            username: data.email.split('@')[0],
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
+        if (error) {
+          throw error;
+        }
+        
+        // Create client access if needed
+        if (data.create_access && newClient) {
+          // Create auth user for client
+          const { data: authData, error: authError } = await supabase.functions.invoke('create-client-user', {
+            body: {
+              client: {
+                id: newClient.id,
+                email: data.email,
+                name: data.contact_name,
+                company: data.company_name
+              }
+            }
           });
           
-          toast({
-            title: "Cliente criado com sucesso",
-            description: "O cliente foi cadastrado e receberá um email com os dados de acesso.",
-          });
-          
-          // TODO: Create Google Drive folder
-          // TODO: Send email with temporary password
-          
-          onComplete();
-        } catch (error: any) {
-          console.error("Error creating client with auth account:", error);
-          
-          // Handle common Firebase auth errors
-          if (error.code === 'auth/email-already-in-use') {
+          if (authError) {
+            console.error("Error creating client user account:", authError);
             toast({
-              title: "Erro ao criar cliente",
-              description: "Este email já está em uso. Tente outro email.",
+              title: "Aviso",
+              description: "Cliente criado, mas não foi possível criar uma conta de acesso.",
               variant: "destructive",
             });
           } else {
-            toast({
-              title: "Erro ao criar cliente",
-              description: error.message || "Ocorreu um erro ao criar o cliente.",
-              variant: "destructive",
-            });
+            // Update client with user_id
+            if (authData?.user_id) {
+              await supabase
+                .from('clients')
+                .update({ user_id: authData.user_id })
+                .eq('id', newClient.id);
+            }
+            
+            toast.success("Cliente criado com sucesso e conta de acesso criada");
           }
+        } else {
+          toast.success("Cliente criado com sucesso");
         }
-      } else {
-        // Create client document without auth account
-        const docRef = doc(collection(db, "clients"));
-        await setDoc(docRef, {
-          ...data,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-        });
-        
-        toast({
-          title: "Cliente criado com sucesso",
-          description: "O cliente foi cadastrado sem acesso ao sistema.",
-        });
+
+        // Create Drive folders
+        if (newClient) {
+          await createDriveFolders(newClient.id, {
+            company_name: data.company_name,
+            email: data.email
+          });
+        }
         
         onComplete();
       }
-    } catch (error) {
-      console.error("Error creating client:", error);
-      toast({
-        title: "Erro ao criar cliente",
-        description: "Ocorreu um erro ao criar o cliente.",
-        variant: "destructive",
-      });
+    } catch (error: any) {
+      console.error("Error saving client:", error);
+      toast.error(error.message || "Erro ao salvar cliente");
     } finally {
       setIsSubmitting(false);
     }
@@ -158,7 +251,7 @@ export const ClientForm = ({ onComplete, client }: ClientFormProps) => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormField
               control={form.control}
-              name="companyName"
+              name="company_name"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Nome da Empresa</FormLabel>
@@ -171,7 +264,7 @@ export const ClientForm = ({ onComplete, client }: ClientFormProps) => {
             />
             <FormField
               control={form.control}
-              name="contactName"
+              name="contact_name"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Nome do Contato</FormLabel>
@@ -187,7 +280,7 @@ export const ClientForm = ({ onComplete, client }: ClientFormProps) => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormField
               control={form.control}
-              name="cnpjCpf"
+              name="tax_id"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>CNPJ/CPF</FormLabel>
@@ -200,7 +293,7 @@ export const ClientForm = ({ onComplete, client }: ClientFormProps) => {
             />
             <FormField
               control={form.control}
-              name="contractValue"
+              name="contract_value"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Valor Mensal (R$)</FormLabel>
@@ -323,7 +416,7 @@ export const ClientForm = ({ onComplete, client }: ClientFormProps) => {
             />
             <FormField
               control={form.control}
-              name="contractStart"
+              name="contract_start"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Início do Contrato</FormLabel>
@@ -336,7 +429,7 @@ export const ClientForm = ({ onComplete, client }: ClientFormProps) => {
             />
             <FormField
               control={form.control}
-              name="contractEnd"
+              name="contract_end"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Fim do Contrato</FormLabel>
@@ -344,6 +437,71 @@ export const ClientForm = ({ onComplete, client }: ClientFormProps) => {
                     <Input type="date" {...field} />
                   </FormControl>
                   <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 border p-4 rounded-md">
+            <FormField
+              control={form.control}
+              name="social_media"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel>Social Media</FormLabel>
+                    <FormDescription>
+                      Cliente contratou serviços de Social Media
+                    </FormDescription>
+                  </div>
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={form.control}
+              name="paid_traffic"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel>Tráfego Pago</FormLabel>
+                    <FormDescription>
+                      Cliente contratou serviços de Tráfego Pago
+                    </FormDescription>
+                  </div>
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={form.control}
+              name="website_development"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel>Desenvolvimento Web</FormLabel>
+                    <FormDescription>
+                      Cliente contratou serviços de Desenvolvimento Web
+                    </FormDescription>
+                  </div>
                 </FormItem>
               )}
             />
@@ -385,33 +543,35 @@ export const ClientForm = ({ onComplete, client }: ClientFormProps) => {
             )}
           />
           
-          <FormField
-            control={form.control}
-            name="createAccess"
-            render={({ field }) => (
-              <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                <FormControl>
-                  <Switch
-                    checked={field.value}
-                    onCheckedChange={field.onChange}
-                  />
-                </FormControl>
-                <div className="space-y-1 leading-none">
-                  <FormLabel>Criar acesso ao CRM</FormLabel>
-                  <FormDescription>
-                    Cria uma conta de acesso ao sistema para o cliente com senha temporária
-                  </FormDescription>
-                </div>
-              </FormItem>
-            )}
-          />
+          {!isEditing && (
+            <FormField
+              control={form.control}
+              name="create_access"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel>Criar acesso ao CRM</FormLabel>
+                    <FormDescription>
+                      Cria uma conta de acesso ao sistema para o cliente com senha temporária
+                    </FormDescription>
+                  </div>
+                </FormItem>
+              )}
+            />
+          )}
         </div>
         
         <div className="flex justify-end gap-3">
           <Button variant="outline" type="button" onClick={onComplete}>Cancelar</Button>
           <Button type="submit" disabled={isSubmitting}>
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isSubmitting ? "Salvando..." : "Salvar Cliente"}
+            {isSubmitting ? "Salvando..." : isEditing ? "Atualizar Cliente" : "Salvar Cliente"}
           </Button>
         </div>
       </form>
