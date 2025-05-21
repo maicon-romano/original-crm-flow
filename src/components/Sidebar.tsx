@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -89,7 +90,7 @@ export function Sidebar() {
         {
           title: "Contratos",
           href: "/contracts",
-          icon: <File className="h-5 w-5" />, // Changed from FileContract to File
+          icon: <File className="h-5 w-5" />,
           adminOnly: true,
         },
         {
@@ -203,7 +204,7 @@ export function Sidebar() {
     if (!isMobile && isOpen) {
       setIsOpen(false);
     }
-  }, [isMobile]);
+  }, [isMobile, isOpen]);
 
   return (
     <>
@@ -226,9 +227,8 @@ export function Sidebar() {
       {/* Sidebar */}
       <div
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r bg-white transition-transform dark:bg-gray-800 dark:border-gray-700",
-          isMobile && !isOpen && "-translate-x-full",
-          isMobile && isOpen && "translate-x-0"
+          "fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r bg-white transition-transform duration-300 ease-in-out dark:bg-gray-800 dark:border-gray-700",
+          isMobile && !isOpen ? "-translate-x-full" : "translate-x-0"
         )}
       >
         {/* Logo */}
@@ -321,7 +321,7 @@ export function Sidebar() {
       {/* Overlay for mobile */}
       {isMobile && isOpen && (
         <div
-          className="fixed inset-0 z-30 bg-black/50"
+          className="fixed inset-0 z-30 bg-black/50 transition-opacity duration-300 ease-in-out"
           onClick={() => setIsOpen(false)}
         />
       )}

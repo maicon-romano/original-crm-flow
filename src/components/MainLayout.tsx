@@ -4,6 +4,7 @@ import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useSupabaseAuth } from "@/contexts/SupabaseAuthContext";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 // Define client-only routes
 const CLIENT_ROUTES = [
@@ -30,6 +31,7 @@ export function MainLayout() {
   const { isAuthenticated, user, loading } = useSupabaseAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   
   // Debug authentication status with user details
   useEffect(() => {
@@ -102,9 +104,9 @@ export function MainLayout() {
   return (
     <div className="flex min-h-screen bg-muted/30 dark:bg-gray-900">
       <Sidebar />
-      <div className="flex-1 flex flex-col">
+      <div className={`flex-1 flex flex-col ${isMobile ? 'ml-0' : 'ml-64'}`}>
         <Header />
-        <main className="flex-1 container mx-auto p-4 md:p-6">
+        <main className="flex-1 container mx-auto p-4 md:p-6 transition-all duration-300">
           <Outlet />
         </main>
       </div>
