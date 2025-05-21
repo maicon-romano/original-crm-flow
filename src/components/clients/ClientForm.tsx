@@ -173,7 +173,7 @@ export function ClientForm({ onComplete, client }: ClientFormProps) {
     try {
       console.log("Submitting client form data:", data);
       
-      // Format the data for submission
+      // Format the data for submission - remove custom_plan_details as it doesn't exist in the database
       const formattedData = {
         ...data,
         // Ensure person_type is required
@@ -181,9 +181,12 @@ export function ClientForm({ onComplete, client }: ClientFormProps) {
         // Format dates for storage
         contract_start: data.contract_start ? data.contract_start.toISOString() : undefined,
         contract_end: data.contract_end ? data.contract_end.toISOString() : undefined,
-        // Handle notes field based on plan selection
+        // Handle notes field based on plan selection - store custom plan details in notes if selected
         notes: data.plan === "personalizado" ? data.custom_plan_details : data.notes,
       };
+      
+      // Remove the custom_plan_details field as it doesn't exist in the database schema
+      delete (formattedData as any).custom_plan_details;
 
       // If we're editing an existing client
       if (isEditing && client) {
@@ -651,69 +654,6 @@ export function ClientForm({ onComplete, client }: ClientFormProps) {
                   )}
                 />
               )}
-              
-              <FormField
-                control={form.control}
-                name="social_media"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                    <div className="space-y-0.5">
-                      <FormLabel className="text-base">Social Media</FormLabel>
-                      <FormDescription>
-                        Serviços de gestão de redes sociais
-                      </FormDescription>
-                    </div>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="paid_traffic"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                    <div className="space-y-0.5">
-                      <FormLabel className="text-base">Tráfego Pago</FormLabel>
-                      <FormDescription>
-                        Serviços de anúncios online e gestão de campanhas
-                      </FormDescription>
-                    </div>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="website_development"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                    <div className="space-y-0.5">
-                      <FormLabel className="text-base">Desenvolvimento de Site</FormLabel>
-                      <FormDescription>
-                        Desenvolvimento e manutenção de website
-                      </FormDescription>
-                    </div>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
             </div>
           </TabsContent>
           
