@@ -1,5 +1,13 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { 
+  signInWithEmailAndPassword, 
+  signOut, 
+  onAuthStateChanged, 
+  User as FirebaseUser
+} from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
+import { auth, db } from "@/lib/firebase";
 
 type UserRole = "admin" | "user" | "client";
 
