@@ -179,6 +179,7 @@ export function ClientForm({ onComplete, client: existingClient }: ClientFormPro
         // Ensure required fields are provided
         person_type: data.person_type || "juridica",
         contact_name: data.contact_name || "", // Ensure contact_name is always provided
+        status: data.status || "active", // Ensure status is always provided
         // Format dates for storage
         contract_start: data.contract_start ? data.contract_start.toISOString() : undefined,
         contract_end: data.contract_end ? data.contract_end.toISOString() : undefined,
