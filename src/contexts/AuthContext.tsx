@@ -6,7 +6,7 @@ import {
   onAuthStateChanged, 
   User as FirebaseUser
 } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 
 type UserRole = "admin" | "user" | "client";
@@ -81,21 +81,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               ...userData
             });
           } else {
-            // If user doesn't exist in Firestore, fallback to mock users
-            console.log("User not found in Firestore, using mock data");
-            const mockUser = MOCK_USERS.find(u => u.email === firebaseUser.email);
-            if (mockUser) {
+            console.log("User not found in Firestore, checking collection by email");
+            // If user not found by UID, try searching by email
+            const usersRef = collection(db, "users");
+            const q = query(usersRef, where("email", "==", firebaseUser.email));
+            const querySnapshot = await getDocs(q);
+            
+            if (!querySnapshot.empty) {
+              console.log("User found in Firestore by email");
+              const userData = querySnapshot.docs[0].data() as Omit<User, "id">;
               setUser({
-                ...mockUser,
-                id: firebaseUser.uid
+                id: firebaseUser.uid,
+                ...userData
               });
-              // Also store in localStorage for persistence
-              localStorage.setItem("crmUser", JSON.stringify({
-                ...mockUser,
-                id: firebaseUser.uid
-              }));
             } else {
-              // Default to a regular user if no matching mock user
+              console.log("User not found in Firestore by email, using firebase user info");
+              // Create basic user profile from Firebase user info
               const defaultUser = {
                 id: firebaseUser.uid,
                 name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
@@ -108,6 +109,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           }
         } catch (error) {
           console.error("Error fetching user data:", error);
+          
+          // Fallback to mock users for specific emails
+          console.log("Error fetching Firestore data, checking mock users");
+          const mockUser = MOCK_USERS.find(u => u.email === firebaseUser.email);
+          if (mockUser) {
+            console.log("Using mock user data for:", firebaseUser.email);
+            setUser({
+              ...mockUser,
+              id: firebaseUser.uid
+            });
+            localStorage.setItem("crmUser", JSON.stringify({
+              ...mockUser,
+              id: firebaseUser.uid
+            }));
+          } else {
+            // Default to a user based on Firebase info
+            console.log("No mock user found, using firebase user info");
+            const defaultUser = {
+              id: firebaseUser.uid,
+              name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+              email: firebaseUser.email || '',
+              role: 'user' as UserRole,
+            };
+            setUser(defaultUser);
+            localStorage.setItem("crmUser", JSON.stringify(defaultUser));
+          }
         }
       } else {
         // Check local storage as fallback (for development only)
@@ -134,22 +161,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     
     try {
       // First try Firebase authentication
+      console.log("Trying Firebase authentication");
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const firebaseUser = userCredential.user;
       console.log("Firebase login successful:", firebaseUser.email);
       
       // User data will be set by the onAuthStateChanged listener
-      
-      // For development fallback - store in localStorage
-      const mockUser = MOCK_USERS.find(u => u.email === email);
-      if (mockUser) {
-        console.log("Storing mock user in localStorage");
-        localStorage.setItem("crmUser", JSON.stringify({
-          ...mockUser,
-          id: firebaseUser.uid
-        }));
-      }
-      
+      setLoading(false);
       return;
     } catch (firebaseError) {
       console.error("Firebase login error:", firebaseError);
@@ -176,12 +194,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // Store user in local storage
         localStorage.setItem("crmUser", JSON.stringify(foundUser));
         setUser(foundUser);
+        setLoading(false);
       } catch (mockError) {
         console.error("Login error:", mockError);
+        setLoading(false);
         throw mockError;
       }
-    } finally {
-      setLoading(false);
     }
   };
 

@@ -25,24 +25,30 @@ const Login = () => {
     if (user?.needsPasswordReset) {
       return <Navigate to="/reset-password" />;
     }
+    console.log("User is authenticated, redirecting to dashboard");
     return <Navigate to="/dashboard" />;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    console.log("Login form submitted for:", email);
 
     try {
       await login(email, password);
+      console.log("Login successful, redirect will happen automatically");
       toast({
         title: "Login bem-sucedido",
         description: "Você foi autenticado com sucesso.",
       });
-      // The redirect will happen automatically due to the isAuthenticated check above
+      // For direct navigation if needed
+      navigate("/dashboard");
     } catch (error) {
+      console.error("Login error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Falha no login. Verifique suas credenciais.";
       toast({
         title: "Erro de autenticação",
-        description: error instanceof Error ? error.message : "Falha no login. Verifique suas credenciais.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -147,6 +153,7 @@ const Login = () => {
           <p>Admin: admin@originaldigital.com / password</p>
           <p>Usuário: user@originaldigital.com / password</p>
           <p>Cliente: client@example.com / password</p>
+          <p>Firebase: maicon.romano@originaldigital.com.br / Ma17romano</p>
         </div>
       </div>
     </div>
