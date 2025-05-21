@@ -94,7 +94,14 @@ export const useClients = () => {
       }
       
       console.log(`Fetched ${data?.length} clients`);
-      setClients(data || []);
+      
+      // Transform the data to ensure person_type is properly typed
+      const typedClients = data?.map(client => ({
+        ...client,
+        person_type: (client.person_type === "fisica" ? "fisica" : "juridica") as "juridica" | "fisica"
+      })) || [];
+      
+      setClients(typedClients);
     } catch (error) {
       console.error("Exception fetching clients:", error);
       toast.error("Erro ao carregar clientes");
