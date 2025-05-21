@@ -1,47 +1,37 @@
 
 import { useState } from "react";
 import { Client } from "@/hooks/useClients";
-import { useSupabaseAuth } from "@/contexts/SupabaseAuthContext";
 import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHeader, 
-  TableHead, 
+  Card, 
+  CardContent, 
+  CardDescription, 
+  CardHeader, 
+  CardTitle 
+} from "@/components/ui/card";
+import { 
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
   TableRow 
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuLabel, 
-  DropdownMenuSeparator, 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { 
-  Edit, 
-  Trash2, 
-  MoreHorizontal, 
-  ExternalLink, 
-  FileText,
-  Loader2,
-  FolderOpen,
-  Search
-} from "lucide-react";
-import { toast } from "sonner";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ClientEditDialog } from "./ClientEditDialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, MoreHorizontal, RefreshCw } from "lucide-react";
+import { formatCurrency, formatDate } from "@/lib/utils";
+import { toast } from "sonner";
 
 interface ClientsListProps {
   clients: Client[];
@@ -51,46 +41,39 @@ interface ClientsListProps {
 }
 
 export function ClientsList({ clients, isLoading, onRefresh, onDelete }: ClientsListProps) {
-  const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [clientToEdit, setClientToEdit] = useState<Client | null>(null);
-  const { user } = useSupabaseAuth();
+  const [editClient, setEditClient] = useState<Client | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
   
-  // User roles
-  const isAdmin = user?.role === "admin";
-  const isAdminOrStaff = user?.role === "admin" || user?.role === "user";
-  const isClient = user?.role === "client";
-
-  // Format date from timestamp
-  const formatDate = (dateString: string) => {
-    if (!dateString) return "";
-    return new Date(dateString).toLocaleDateString('pt-BR');
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(part => part[0])
+      .join('')
+      .toUpperCase()
+      .substring(0, 2);
   };
-
-  const handleDelete = async () => {
-    if (!clientToDelete || !onDelete) return;
+  
+  const handleEditComplete = () => {
+    setIsDialogOpen(false);
+    onRefresh();
+    toast.success("Cliente atualizado com sucesso!");
+  };
+  
+  const handleEdit = (client: Client) => {
+    setEditClient(client);
+    setIsDialogOpen(true);
+  };
+  
+  const handleDelete = async (id: string, name: string) => {
+    if (!onDelete) return;
     
-    try {
-      setIsDeleting(true);
-      await onDelete(clientToDelete.id);
-      toast.success("Cliente excluído com sucesso");
-      setClientToDelete(null);
-      onRefresh();
-    } catch (error: any) {
-      toast.error(error.message || "Erro ao excluir cliente");
-    } finally {
-      setIsDeleting(false);
+    const success = await onDelete(id);
+    if (success) {
+      toast.success(`Cliente ${name} excluído com sucesso!`);
     }
   };
-
-  const handleViewFiles = (client: Client) => {
-    if (client.drive_folder_id) {
-      window.open(`https://drive.google.com/drive/folders/${client.drive_folder_id}`, '_blank');
-    } else {
-      toast.error("Este cliente não possui pasta no Drive");
-    }
-  };
-
+  
+  // Loading state
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -98,145 +81,151 @@ export function ClientsList({ clients, isLoading, onRefresh, onDelete }: Clients
       </div>
     );
   }
-
+  
+  // Empty state
   if (clients.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center space-y-4 bg-white dark:bg-gray-800 p-12 rounded-lg border text-center">
-        <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center">
-          <Search className="h-10 w-10 text-primary" />
-        </div>
-        <h2 className="text-xl font-semibold">Nenhum cliente encontrado</h2>
-        <p className="text-muted-foreground max-w-sm">
-          {clients.length === 0 ? "Nenhum cliente encontrado." : "Clientes cadastrados aparecerão aqui."}
-        </p>
-        {isAdminOrStaff && (
-          <Button onClick={() => onRefresh()}>
-            <RefreshCcw className="mr-2 h-4 w-4" /> Atualizar
-          </Button>
-        )}
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Nenhum cliente encontrado</CardTitle>
+          <CardDescription>
+            Não foram encontrados clientes com os critérios atuais.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex justify-center py-8">
+          <div className="text-center">
+            <p className="text-muted-foreground mb-4">
+              Tente ajustar sua pesquisa ou adicione um novo cliente.
+            </p>
+            <Button onClick={onRefresh} variant="outline" className="mt-2">
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Atualizar Lista
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <>
-      <div className="border rounded-md">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Empresa</TableHead>
-              <TableHead>Contato</TableHead>
-              <TableHead className="hidden md:table-cell">Email</TableHead>
-              <TableHead className="hidden md:table-cell">Telefone</TableHead>
-              <TableHead className="hidden md:table-cell">Status</TableHead>
-              <TableHead className="hidden md:table-cell">Cadastro</TableHead>
-              <TableHead className="w-[70px]"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {clients.map((client) => (
-              <TableRow key={client.id}>
-                <TableCell className="font-medium">{client.company_name}</TableCell>
-                <TableCell>{client.contact_name}</TableCell>
-                <TableCell className="hidden md:table-cell">{client.email}</TableCell>
-                <TableCell className="hidden md:table-cell">{client.phone || "-"}</TableCell>
-                <TableCell className="hidden md:table-cell">
-                  <Badge
-                    variant={client.status === "active" ? "default" : client.status === "inactive" ? "secondary" : "outline"}
-                    className={client.status === "active" ? "bg-green-500" : client.status === "inactive" ? "bg-gray-500" : ""}
-                  >
-                    {client.status === "active" ? "Ativo" : client.status === "inactive" ? "Inativo" : "Pendente"}
-                  </Badge>
-                </TableCell>
-                <TableCell className="hidden md:table-cell">{formatDate(client.created_at)}</TableCell>
-                <TableCell>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuLabel>Ações</DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-                      
-                      {isAdminOrStaff && (
-                        <DropdownMenuItem onClick={() => setClientToEdit(client)}>
-                          <Edit className="mr-2 h-4 w-4" /> Editar
-                        </DropdownMenuItem>
-                      )}
-                      
-                      <DropdownMenuItem onClick={() => handleViewFiles(client)}>
-                        <FolderOpen className="mr-2 h-4 w-4" /> Arquivos
-                      </DropdownMenuItem>
-                      
-                      {isAdmin && (
-                        <DropdownMenuItem onClick={() => window.location.href = `/projects?client=${client.id}`}>
-                          <FileText className="mr-2 h-4 w-4" /> Projetos
-                        </DropdownMenuItem>
-                      )}
-                      
-                      {client.website && (
-                        <DropdownMenuItem onClick={() => window.open(client.website, '_blank')}>
-                          <ExternalLink className="mr-2 h-4 w-4" /> Website
-                        </DropdownMenuItem>
-                      )}
-                      
-                      {isAdmin && (
-                        <>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem 
-                            className="text-destructive" 
-                            onClick={() => setClientToDelete(client)}
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" /> Excluir
-                          </DropdownMenuItem>
-                        </>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </TableCell>
+    <Card>
+      <CardHeader className="pb-4">
+        <CardTitle>Clientes</CardTitle>
+        <CardDescription>
+          Gerencie e visualize todos os clientes da plataforma.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="rounded-md border overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Cliente</TableHead>
+                <TableHead>Serviços</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="hidden md:table-cell">Criado em</TableHead>
+                <TableHead className="hidden md:table-cell">Valor</TableHead>
+                <TableHead className="text-right">Ações</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={!!clientToDelete} onOpenChange={open => !open && setClientToDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
-            <AlertDialogDescription>
-              Tem certeza que deseja excluir o cliente "{clientToDelete?.company_name}"? Esta ação não pode ser desfeita.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleDelete} 
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              disabled={isDeleting}
-            >
-              {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isDeleting ? "Excluindo..." : "Excluir"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Edit Dialog */}
-      {clientToEdit && (
+            </TableHeader>
+            <TableBody>
+              {clients.map((client) => (
+                <TableRow key={client.id}>
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      <Avatar>
+                        <AvatarFallback>
+                          {getInitials(client.company_name || client.contact_name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <div className="font-medium">{client.company_name}</div>
+                        <div className="text-sm text-muted-foreground">{client.contact_name}</div>
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-wrap gap-1">
+                      {client.social_media && (
+                        <Badge variant="outline" className="text-xs">Social Media</Badge>
+                      )}
+                      {client.paid_traffic && (
+                        <Badge variant="outline" className="text-xs">Tráfego Pago</Badge>
+                      )}
+                      {client.website_development && (
+                        <Badge variant="outline" className="text-xs">Site</Badge>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={client.status === 'active' ? 'success' : 'secondary'}>
+                      {client.status === 'active' ? 'Ativo' : 'Inativo'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="hidden md:table-cell">
+                    {formatDate(client.created_at)}
+                  </TableCell>
+                  <TableCell className="hidden md:table-cell">
+                    {formatCurrency(client.contract_value || 0)}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" className="h-8 w-8 p-0">
+                          <span className="sr-only">Abrir menu</span>
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Ações</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => handleEdit(client)}>
+                          Editar
+                        </DropdownMenuItem>
+                        {onDelete && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                                  Excluir
+                                </DropdownMenuItem>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Esta ação não pode ser desfeita. Isso excluirá permanentemente o cliente {client.company_name}.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => handleDelete(client.id, client.company_name)}>
+                                    Excluir
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+      
+      {editClient && (
         <ClientEditDialog 
-          client={clientToEdit} 
-          open={!!clientToEdit}
-          onOpenChange={(open) => !open && setClientToEdit(null)}
-          onComplete={() => {
-            setClientToEdit(null);
-            onRefresh();
-          }}
+          client={editClient} 
+          open={isDialogOpen} 
+          onOpenChange={setIsDialogOpen}
+          onComplete={handleEditComplete}
         />
       )}
-    </>
+    </Card>
   );
 }
