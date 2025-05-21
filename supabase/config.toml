@@ -35,5 +35,8 @@ verify_jwt = true
 [functions.send-invitation]
 verify_jwt = true
 
+[functions.list-drive-folders]
+verify_jwt = true
+
 [realtime]
 enabled = true

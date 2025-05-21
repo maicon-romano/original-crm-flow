@@ -8,7 +8,10 @@ import { google } from "npm:googleapis@126.0.1";
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
+    return new Response(null, { 
+      headers: corsHeaders,
+      status: 204 // Return 204 No Content for OPTIONS requests
+    });
   }
 
   try {
