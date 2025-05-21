@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -113,6 +112,8 @@ export const useClients = () => {
           }
         } catch (driveErr) {
           console.error("Exception creating Drive folders:", driveErr);
+          toast.error("Erro ao criar pastas no Google Drive. O cliente foi salvo, mas sem as pastas.");
+          // Don't throw here - we want to keep the client even if Drive folder creation fails
         }
       }
 

@@ -13,9 +13,12 @@ interface ClientData {
 }
 
 Deno.serve(async (req) => {
-  // Handle CORS preflight requests
+  // Handle CORS preflight requests - this is critical for browser requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
+    return new Response(null, { 
+      headers: corsHeaders,
+      status: 204 // Return 204 No Content for OPTIONS requests
+    });
   }
 
   try {
