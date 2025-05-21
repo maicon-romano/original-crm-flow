@@ -74,7 +74,10 @@ export const UserEditDialog = ({ user, onComplete }: UserEditDialogProps) => {
         })
         .eq("id", user.id);
       
-      if (error) throw error;
+      if (error) {
+        console.error("Error updating user:", error);
+        throw new Error(error.message || "Erro ao atualizar usuário");
+      }
       
       toast.success("Usuário atualizado com sucesso");
       onComplete();

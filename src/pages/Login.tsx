@@ -1,5 +1,5 @@
 
-import { useState, FormEvent } from "react";
+import { useState, FormEvent, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useSupabaseAuth } from "@/contexts/SupabaseAuthContext";
 import { Button } from "@/components/ui/button";
@@ -18,19 +18,19 @@ const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Redirect if already authenticated based on user state
-  if (isAuthenticated) {
-    if (user?.needs_password_reset) {
-      // Se o usuário precisa redefinir a senha, redirecione para a página de atualização de senha
-      navigate("/update-password", { replace: true });
-      return null;
-    } else {
-      // Caso contrário, redirecione para o dashboard ou página anterior
-      const from = (location.state as any)?.from?.pathname || "/dashboard";
-      navigate(from, { replace: true });
-      return null;
+  // Check authentication status when component mounts and when it changes
+  useEffect(() => {
+    if (isAuthenticated) {
+      if (user?.needs_password_reset) {
+        console.log("User needs to reset password, redirecting to update-password");
+        navigate("/update-password", { replace: true });
+      } else {
+        const from = (location.state as any)?.from?.pathname || "/dashboard";
+        console.log(`User authenticated, redirecting to ${from}`);
+        navigate(from, { replace: true });
+      }
     }
-  }
+  }, [isAuthenticated, user, navigate, location.state]);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -40,7 +40,7 @@ const Login = () => {
     try {
       await login(email, password);
       toast.success("Login bem-sucedido!");
-      // Navigation will happen automatically through auth state change
+      // Navigation will happen via the useEffect hook above
     } catch (err: any) {
       console.error("Login error:", err);
       setError(err.message || "Erro ao fazer login. Verifique suas credenciais.");

@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+
+import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -43,43 +44,62 @@ const isReservedAdmin = (email: string): boolean => {
   return adminEmails.includes(email.toLowerCase());
 };
 
+// Clean up auth state
+const cleanupAuthState = () => {
+  // Remove standard auth tokens
+  localStorage.removeItem('supabase.auth.token');
+  // Remove all Supabase auth keys from localStorage
+  Object.keys(localStorage).forEach((key) => {
+    if (key.startsWith('supabase.auth.') || key.includes('sb-')) {
+      localStorage.removeItem(key);
+    }
+  });
+  // Remove from sessionStorage if in use
+  Object.keys(sessionStorage || {}).forEach((key) => {
+    if (key.startsWith('supabase.auth.') || key.includes('sb-')) {
+      sessionStorage.removeItem(key);
+    }
+  });
+};
+
 export const SupabaseAuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const firstLoadComplete = useRef(false);
 
   // Listen for authentication state changes
   useEffect(() => {
     console.log("Setting up Supabase auth state listener");
     
-    // First check if there's an existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log("Existing session:", session ? "Yes" : "No");
-      setSession(session);
-      
-      if (session?.user) {
-        fetchUserProfile(session.user.id, session);
-      } else {
-        setLoading(false);
-      }
-    });
-    
-    // Set up auth state change listener
+    // Set up auth state change listener first
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log("Auth state changed:", event, session?.user?.email);
-        setSession(session);
+      async (event, newSession) => {
+        console.log("Auth state changed:", event, newSession?.user?.email);
+        setSession(newSession);
 
-        if (session?.user) {
-          // Don't call this directly - it would cause a deadlock
-          // Instead defer it with setTimeout
-          setTimeout(() => fetchUserProfile(session.user.id, session), 0);
+        if (newSession?.user) {
+          // Defer profile fetch to avoid deadlocks
+          setTimeout(() => fetchUserProfile(newSession.user.id, newSession), 0);
         } else {
           setUser(null);
           setLoading(false);
         }
       }
     );
+    
+    // Then check for existing session
+    supabase.auth.getSession().then(({ data: { session: existingSession } }) => {
+      console.log("Existing session:", existingSession ? "Yes" : "No");
+      setSession(existingSession);
+      
+      if (existingSession?.user) {
+        fetchUserProfile(existingSession.user.id, existingSession);
+      } else {
+        setLoading(false);
+        firstLoadComplete.current = true;
+      }
+    });
 
     return () => {
       subscription.unsubscribe();
@@ -159,6 +179,17 @@ export const SupabaseAuthProvider = ({ children }: { children: ReactNode }) => {
       } else {
         console.log("User profile found:", data);
         
+        // Check if user is active
+        if (!data.active) {
+          console.log("User account is inactive");
+          toast.error("Sua conta está inativa. Entre em contato com o administrador.");
+          await supabase.auth.signOut();
+          cleanupAuthState();
+          setUser(null);
+          setSession(null);
+          return;
+        }
+        
         // Process user data
         const currentUser: AuthUser = {
           id: data.id,
@@ -208,6 +239,7 @@ export const SupabaseAuthProvider = ({ children }: { children: ReactNode }) => {
       }
     } finally {
       setLoading(false);
+      firstLoadComplete.current = true;
     }
   };
 
@@ -217,6 +249,17 @@ export const SupabaseAuthProvider = ({ children }: { children: ReactNode }) => {
     console.log("Attempting login for:", email);
     
     try {
+      // Clean up existing state first
+      cleanupAuthState();
+      
+      // Try to sign out first to ensure clean state
+      try {
+        await supabase.auth.signOut({ scope: 'global' });
+      } catch (err) {
+        // Continue even if this fails
+        console.log("Pre-login signout failed, continuing...");
+      }
+      
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -243,7 +286,13 @@ export const SupabaseAuthProvider = ({ children }: { children: ReactNode }) => {
   const logout = async () => {
     try {
       console.log("Logging out");
-      await supabase.auth.signOut();
+      
+      // Clean up auth state
+      cleanupAuthState();
+      
+      // Attempt global sign out
+      await supabase.auth.signOut({ scope: 'global' });
+      
       localStorage.removeItem("crmUser");
       setUser(null);
       setSession(null);

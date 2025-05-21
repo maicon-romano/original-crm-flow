@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useSupabaseAuth } from "@/contexts/SupabaseAuthContext";
@@ -20,13 +20,13 @@ interface User {
 
 export const useUsers = () => {
   const [users, setUsers] = useState<User[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const { user } = useSupabaseAuth();
   const isMounted = useRef(true);
   const dataFetchedRef = useRef(false);
 
-  const fetchUsers = async () => {
-    if (dataFetchedRef.current || !isMounted.current) return;
+  const fetchUsers = useCallback(async (showToast = true) => {
+    if (!isMounted.current || !user?.role) return;
     
     const isAdmin = user?.role === "admin";
     if (!isAdmin) {
@@ -37,7 +37,9 @@ export const useUsers = () => {
     try {
       setIsLoading(true);
       console.log("Fetching users from Supabase...");
-      toast.info("Carregando usuários...");
+      if (showToast) {
+        toast.info("Carregando usuários...");
+      }
       
       // Use rpc call to avoid RLS recursion
       const { data, error } = await supabase.rpc('get_all_users');
@@ -66,13 +68,13 @@ export const useUsers = () => {
         }
       }
       
-      if (isMounted.current) {
+      if (isMounted.current && showToast) {
         toast.success(`${data?.length || 0} usuários carregados!`);
       }
     } catch (error: any) {
       console.error("Error fetching users:", error);
       
-      if (isMounted.current) {
+      if (isMounted.current && showToast) {
         toast.error("Erro ao carregar usuários. Verifique suas permissões.");
       }
     } finally {
@@ -80,13 +82,13 @@ export const useUsers = () => {
         setIsLoading(false);
       }
     }
-  };
+  }, [user?.role]);
 
-  // Refresh users data
-  const refreshUsers = () => {
+  // Refresh users data - only explicitly called when needed
+  const refreshUsers = useCallback(() => {
     dataFetchedRef.current = false;
     fetchUsers();
-  };
+  }, [fetchUsers]);
 
   // Cleanup function to prevent state updates on unmounted component
   useEffect(() => {
@@ -97,12 +99,12 @@ export const useUsers = () => {
     };
   }, []);
 
-  // Only fetch if user exists and is admin
+  // Fetch users only once when component mounts and user is admin
   useEffect(() => {
-    if (user?.role === "admin") {
-      fetchUsers();
+    if (user?.role === "admin" && !dataFetchedRef.current) {
+      fetchUsers(false); // Initial fetch without toast
     }
-  }, [user?.role]);
+  }, [user?.role, fetchUsers]);
 
   return {
     users,

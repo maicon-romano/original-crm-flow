@@ -114,6 +114,23 @@ Deno.serve(async (req) => {
     // Initialize Supabase client with admin privileges
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     
+    // Check if user already exists
+    const { data: existingUser, error: checkError } = await supabase
+      .from('users')
+      .select('id, email')
+      .eq('email', email)
+      .single();
+      
+    if (existingUser) {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: 'Este email já está em uso no sistema' 
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    
     // Generate temporary password
     const temporaryPassword = generateRandomPassword(12);
     

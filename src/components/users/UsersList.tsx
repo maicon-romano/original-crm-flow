@@ -104,7 +104,7 @@ export const UsersList = ({ users, isLoading, onRefresh }: UsersListProps) => {
         throw new Error("Você não pode excluir sua própria conta");
       }
       
-      // Delete from users table
+      // Delete from users table first
       const { error: deleteError } = await supabase
         .from("users")
         .delete()
