@@ -5,6 +5,24 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 
+// Define client-only routes
+const CLIENT_ROUTES = [
+  "/meus-projetos",
+  "/minhas-tarefas",
+  "/meus-arquivos",
+  "/minhas-faturas",
+  "/meu-perfil",
+];
+
+// Define protected admin routes
+const ADMIN_ONLY_ROUTES = [
+  "/configuracoes",
+  "/financeiro",
+  "/contratos",
+  "/relatorios",
+  "/usuarios",
+];
+
 export function MainLayout() {
   const { isAuthenticated, user, loading } = useAuth();
   const location = useLocation();
@@ -14,6 +32,25 @@ export function MainLayout() {
   useEffect(() => {
     console.log("MainLayout - Auth status:", { isAuthenticated, user, loading, path: location.pathname });
   }, [isAuthenticated, user, loading, location.pathname]);
+
+  useEffect(() => {
+    // Check permissions for current route
+    if (isAuthenticated && user && !loading) {
+      // If user is client and trying to access a non-client route
+      if (user.role === "client" && 
+          !CLIENT_ROUTES.includes(location.pathname) && 
+          location.pathname !== "/dashboard") {
+        console.log("Client accessing restricted route, redirecting to /meus-projetos");
+        navigate("/meus-projetos");
+      }
+      
+      // If user is regular user and trying to access admin-only route
+      if (user.role === "user" && ADMIN_ONLY_ROUTES.some(route => location.pathname.startsWith(route))) {
+        console.log("Regular user accessing admin route, redirecting to /dashboard");
+        navigate("/dashboard");
+      }
+    }
+  }, [isAuthenticated, user, loading, location.pathname, navigate]);
 
   // Show loading state
   if (loading) {
@@ -34,6 +71,12 @@ export function MainLayout() {
   if (user?.needsPasswordReset) {
     console.log("User needs password reset, redirecting");
     return <Navigate to="/reset-password" replace />;
+  }
+
+  // For clients on dashboard route, redirect to projects
+  if (user?.role === "client" && location.pathname === "/dashboard") {
+    console.log("Client on dashboard, redirecting to projects");
+    return <Navigate to="/meus-projetos" replace />;
   }
 
   console.log("Rendering main layout for authenticated user");

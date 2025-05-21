@@ -4,20 +4,25 @@ import {
   signInWithEmailAndPassword, 
   signOut as firebaseSignOut, 
   onAuthStateChanged, 
-  User as FirebaseUser
+  User as FirebaseUser,
+  sendPasswordResetEmail
 } from "firebase/auth";
-import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, getDocs, setDoc, updateDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 
-type UserRole = "admin" | "user" | "client";
+// Define user roles
+export type UserRole = "admin" | "user" | "client";
 
-interface User {
+// Define user interface
+export interface User {
   id: string;
   name: string;
   email: string;
   role: UserRole;
   avatar?: string;
   needsPasswordReset?: boolean;
+  createdAt?: Date;
+  lastLogin?: Date;
 }
 
 interface AuthContextType {
@@ -25,6 +30,8 @@ interface AuthContextType {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
+  resetPassword: (email: string) => Promise<void>;
+  updateUserPassword: (newPassword: string) => Promise<void>;
   isAuthenticated: boolean;
 }
 
@@ -69,42 +76,96 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       if (firebaseUser) {
         try {
-          // Try to get user data from Firestore
+          // First try to get user data from 'users' collection (internal users)
           const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
           
           if (userDoc.exists()) {
-            // If user exists in Firestore, use that data
-            console.log("User found in Firestore");
+            // If user exists in Firestore as internal user
+            console.log("User found in users collection");
             const userData = userDoc.data() as Omit<User, "id">;
-            setUser({
+            const currentUser = {
               id: firebaseUser.uid,
               ...userData
-            });
-          } else {
-            console.log("User not found in Firestore, checking collection by email");
-            // If user not found by UID, try searching by email
-            const usersRef = collection(db, "users");
-            const q = query(usersRef, where("email", "==", firebaseUser.email));
-            const querySnapshot = await getDocs(q);
+            };
             
-            if (!querySnapshot.empty) {
-              console.log("User found in Firestore by email");
-              const userData = querySnapshot.docs[0].data() as Omit<User, "id">;
-              setUser({
+            // Update lastLogin time
+            await updateDoc(doc(db, "users", firebaseUser.uid), {
+              lastLogin: new Date()
+            });
+            
+            setUser(currentUser);
+            localStorage.setItem("crmUser", JSON.stringify(currentUser));
+          } else {
+            // If not in users collection, try clients collection
+            const clientDoc = await getDoc(doc(db, "clients", firebaseUser.uid));
+            
+            if (clientDoc.exists()) {
+              console.log("User found in clients collection");
+              const clientData = clientDoc.data();
+              const currentUser: User = {
                 id: firebaseUser.uid,
-                ...userData
-              });
-            } else {
-              console.log("User not found in Firestore by email, using firebase user info");
-              // Create basic user profile from Firebase user info
-              const defaultUser = {
-                id: firebaseUser.uid,
-                name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
-                email: firebaseUser.email || '',
-                role: 'user' as UserRole,
+                name: clientData.nomeFantasia || clientData.razaoSocial,
+                email: clientData.email,
+                role: "client" as UserRole,
+                needsPasswordReset: clientData.needsPasswordReset,
+                avatar: clientData.avatar
               };
-              setUser(defaultUser);
-              localStorage.setItem("crmUser", JSON.stringify(defaultUser));
+              
+              // Update lastLogin time
+              await updateDoc(doc(db, "clients", firebaseUser.uid), {
+                lastLogin: new Date()
+              });
+              
+              setUser(currentUser);
+              localStorage.setItem("crmUser", JSON.stringify(currentUser));
+            } else {
+              console.log("User not found in users or clients collection, searching by email");
+              // If user not found by UID, try searching by email in both collections
+              
+              // Check users collection by email
+              const usersRef = collection(db, "users");
+              const usersQuery = query(usersRef, where("email", "==", firebaseUser.email));
+              const usersSnapshot = await getDocs(usersQuery);
+              
+              // Check clients collection by email
+              const clientsRef = collection(db, "clients");
+              const clientsQuery = query(clientsRef, where("email", "==", firebaseUser.email));
+              const clientsSnapshot = await getDocs(clientsQuery);
+              
+              if (!usersSnapshot.empty) {
+                console.log("User found in users collection by email");
+                const userData = usersSnapshot.docs[0].data() as Omit<User, "id">;
+                const currentUser = {
+                  id: firebaseUser.uid,
+                  ...userData
+                };
+                setUser(currentUser);
+                localStorage.setItem("crmUser", JSON.stringify(currentUser));
+              } else if (!clientsSnapshot.empty) {
+                console.log("User found in clients collection by email");
+                const clientData = clientsSnapshot.docs[0].data();
+                const currentUser: User = {
+                  id: firebaseUser.uid,
+                  name: clientData.nomeFantasia || clientData.razaoSocial,
+                  email: clientData.email,
+                  role: "client" as UserRole,
+                  needsPasswordReset: clientData.needsPasswordReset,
+                  avatar: clientData.avatar
+                };
+                setUser(currentUser);
+                localStorage.setItem("crmUser", JSON.stringify(currentUser));
+              } else {
+                console.log("User not found in Firestore, creating minimal profile from Firebase data");
+                // Create basic user profile from Firebase user info
+                const defaultUser = {
+                  id: firebaseUser.uid,
+                  name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+                  email: firebaseUser.email || '',
+                  role: 'user' as UserRole,
+                };
+                setUser(defaultUser);
+                localStorage.setItem("crmUser", JSON.stringify(defaultUser));
+              }
             }
           }
         } catch (error) {
@@ -167,7 +228,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       console.log("Firebase login successful:", firebaseUser.email);
       
       // User data will be set by the onAuthStateChanged listener
-      setLoading(false);
       return;
     } catch (firebaseError) {
       console.error("Firebase login error:", firebaseError);
@@ -194,11 +254,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // Store user in local storage
         localStorage.setItem("crmUser", JSON.stringify(foundUser));
         setUser(foundUser);
-        setLoading(false);
       } catch (mockError) {
         console.error("Login error:", mockError);
-        setLoading(false);
         throw mockError;
+      } finally {
+        setLoading(false);
       }
     }
   };
@@ -216,12 +276,55 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(null);
     }
   };
+  
+  const resetPassword = async (email: string) => {
+    try {
+      await sendPasswordResetEmail(auth, email);
+      console.log("Password reset email sent to:", email);
+      return;
+    } catch (error) {
+      console.error("Error sending reset password email:", error);
+      throw error;
+    }
+  };
+  
+  const updateUserPassword = async (newPassword: string) => {
+    if (!auth.currentUser) {
+      throw new Error("No authenticated user found");
+    }
+    
+    try {
+      // In a real app, we'd use updatePassword from firebase/auth
+      // For now, we'll just update the needsPasswordReset flag
+      if (user) {
+        const updatedUser = { ...user, needsPasswordReset: false };
+        
+        if (user.role === "client") {
+          await updateDoc(doc(db, "clients", user.id), {
+            needsPasswordReset: false
+          });
+        } else {
+          await updateDoc(doc(db, "users", user.id), {
+            needsPasswordReset: false
+          });
+        }
+        
+        localStorage.setItem("crmUser", JSON.stringify(updatedUser));
+        setUser(updatedUser);
+      }
+    } catch (error) {
+      console.error("Error updating user password:", error);
+      throw error;
+    }
+  };
 
   const value = {
     user,
     loading,
     login,
     logout,
+    resetPassword,
+    updateUserPassword,
     isAuthenticated: !!user,
   };
 

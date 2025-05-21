@@ -14,6 +14,14 @@ import Clients from "@/pages/Clients";
 import Leads from "@/pages/Leads";
 import NotFound from "@/pages/NotFound";
 
+// Temporary placeholder for client-specific pages
+const ClientProjects = () => <div className="p-4"><h1 className="text-2xl font-bold">Meus Projetos</h1></div>;
+const ClientTasks = () => <div className="p-4"><h1 className="text-2xl font-bold">Minhas Tarefas</h1></div>;
+const ClientFiles = () => <div className="p-4"><h1 className="text-2xl font-bold">Meus Arquivos</h1></div>;
+const ClientInvoices = () => <div className="p-4"><h1 className="text-2xl font-bold">Minhas Faturas</h1></div>;
+const ClientProfile = () => <div className="p-4"><h1 className="text-2xl font-bold">Meu Perfil</h1></div>;
+const UsersPage = () => <div className="p-4"><h1 className="text-2xl font-bold">Gerenciar Usuários</h1></div>;
+
 const queryClient = new QueryClient();
 
 const App = () => {
@@ -30,10 +38,19 @@ const App = () => {
             
             {/* Protected Routes - MainLayout handles auth check and redirects */}
             <Route element={<MainLayout />}>
+              {/* Admin and Staff Routes */}
               <Route path="/" element={<Dashboard />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/clients" element={<Clients />} />
               <Route path="/leads" element={<Leads />} />
+              <Route path="/usuarios" element={<UsersPage />} />
+              
+              {/* Client Routes */}
+              <Route path="/meus-projetos" element={<ClientProjects />} />
+              <Route path="/minhas-tarefas" element={<ClientTasks />} />
+              <Route path="/meus-arquivos" element={<ClientFiles />} />
+              <Route path="/minhas-faturas" element={<ClientInvoices />} />
+              <Route path="/meu-perfil" element={<ClientProfile />} />
               
               {/* Placeholder routes - will be implemented later */}
               <Route path="/projects" element={<Dashboard />} />
