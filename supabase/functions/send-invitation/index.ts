@@ -13,6 +13,7 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
 interface InviteRequest {
@@ -27,12 +28,28 @@ interface InviteRequest {
 }
 
 serve(async (req: Request) => {
+  console.log("Received request:", req.method);
+  
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    console.log("Handling OPTIONS/preflight request");
+    return new Response(null, { 
+      status: 204, 
+      headers: corsHeaders 
+    });
   }
 
   try {
+    if (req.method !== "POST") {
+      return new Response(
+        JSON.stringify({ success: false, error: "Method not allowed" }),
+        {
+          status: 405,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
     const { email, name, role, position, invitedBy }: InviteRequest = await req.json();
     console.log(`Processing invitation for ${email}`);
 
@@ -141,7 +158,7 @@ serve(async (req: Request) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error processing invitation:", error.message);
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
