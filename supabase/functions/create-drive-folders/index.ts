@@ -1,7 +1,4 @@
 
-// Follow this setup guide to integrate the Deno runtime into your project:
-// https://docs.supabase.com/guides/functions/deno-runtime#using-typescript
-
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4'
 import { google } from "npm:googleapis@126.0.1";
 import { corsHeaders } from '../_shared/cors.ts'
@@ -10,8 +7,8 @@ interface ClientData {
   id: string;
   company_name: string;
   email: string;
-  contact_name: string; // Adicionado para usar como nome da pasta quando for pessoa física
-  person_type: "juridica" | "fisica"; // Adicionado para verificar o tipo de pessoa
+  contact_name: string;
+  person_type: "juridica" | "fisica";
 }
 
 Deno.serve(async (req) => {
@@ -28,13 +25,14 @@ Deno.serve(async (req) => {
     const { client } = await req.json() as { client: ClientData };
     
     if (!client || !client.id) {
+      console.error("Missing client data or ID");
       return new Response(
         JSON.stringify({ error: 'ID do cliente é obrigatório' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       )
     }
     
-    // Determinar o nome da pasta com base no tipo de pessoa
+    // Determine folder name based on person type
     let folderName = "";
     if (client.person_type === "fisica") {
       folderName = client.contact_name || "Cliente sem nome";
@@ -42,8 +40,12 @@ Deno.serve(async (req) => {
       folderName = client.company_name || "Empresa sem nome";
     }
     
-    // Verificar se temos um nome de pasta válido
+    // Log folder name determination
+    console.log(`Creating folder for client type: ${client.person_type}, name: ${folderName}`);
+    
+    // Verify folder name is valid
     if (!folderName || folderName.trim() === "") {
+      console.error("Empty folder name detected");
       return new Response(
         JSON.stringify({ error: 'Nome para pasta não fornecido' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
@@ -55,21 +57,30 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') as string
     const supabase = createClient(supabaseUrl, supabaseKey)
     
-    // Verificar se as variáveis de ambiente estão disponíveis
+    // Verify Google Drive credentials
     const googleClientEmail = Deno.env.get('GOOGLE_CLIENT_EMAIL');
     const googlePrivateKey = Deno.env.get('GOOGLE_PRIVATE_KEY');
+    const rootFolderId = Deno.env.get('GOOGLE_DRIVE_ROOT_FOLDER_ID');
+    
+    // Log credential availability
+    console.log("Checking Google Drive credentials:", { 
+      hasEmail: !!googleClientEmail,
+      hasKey: !!googlePrivateKey,
+      hasRootFolder: !!rootFolderId
+    });
     
     if (!googleClientEmail || !googlePrivateKey) {
-      console.error("Google Drive credentials missing:", { 
-        hasEmail: !!googleClientEmail,
-        hasKey: !!googlePrivateKey
-      });
+      console.error("Google Drive credentials missing");
       throw new Error('Credenciais do Google Drive não configuradas');
     }
     
-    console.log(`Iniciando criação de pastas no Google Drive para cliente ${folderName}`);
+    if (!rootFolderId) {
+      console.log("Root folder ID not set in environment, using default behavior (creating at Drive root)");
+    }
     
-    // Initialize Google Drive API
+    console.log(`Creating folders in Google Drive for client ${folderName}`);
+    
+    // Initialize Google Drive API with properly formatted private key
     const jwtClient = new google.auth.JWT(
       googleClientEmail,
       undefined,
@@ -79,38 +90,49 @@ Deno.serve(async (req) => {
     );
     
     // Authenticate
-    console.log("Autenticando com Google Drive...");
+    console.log("Authenticating with Google Drive...");
     try {
       await jwtClient.authorize();
-      console.log("Autenticação com Google Drive bem-sucedida");
+      console.log("Authentication with Google Drive successful");
     } catch (authError) {
-      console.error("Erro na autenticação com Google Drive:", authError);
-      throw new Error('Falha na autenticação com o Google Drive');
+      console.error("Error authenticating with Google Drive:", authError);
+      throw new Error('Failed to authenticate with Google Drive: ' + (authError.message || 'Unknown error'));
     }
     
     const drive = google.drive({ version: 'v3', auth: jwtClient });
     
     // Create main client folder
-    console.log(`Criando pasta principal para ${folderName}`);
+    console.log(`Creating main folder for ${folderName}`);
+    
+    const folderMetadata = {
+      name: folderName,
+      mimeType: 'application/vnd.google-apps.folder',
+    };
+    
+    // If rootFolderId is provided, create the folder inside it
+    if (rootFolderId) {
+      folderMetadata.parents = [rootFolderId];
+      console.log(`Using root folder ID: ${rootFolderId}`);
+    }
+    
     let mainFolder;
     try {
       mainFolder = await drive.files.create({
-        requestBody: {
-          name: folderName,
-          mimeType: 'application/vnd.google-apps.folder',
-        },
+        requestBody: folderMetadata,
       });
+      console.log(`Folder created with response:`, mainFolder.data);
     } catch (folderError) {
-      console.error("Erro ao criar pasta principal:", folderError);
-      throw new Error('Falha ao criar pasta principal no Google Drive');
+      console.error("Error creating main folder:", folderError);
+      throw new Error('Failed to create main folder: ' + (folderError.message || 'Unknown error'));
     }
     
     if (!mainFolder?.data?.id) {
-      throw new Error('Falha ao criar pasta principal no Google Drive - ID não retornado');
+      console.error("No folder ID returned after creation");
+      throw new Error('Failed to create main folder - no ID returned');
     }
     
     const mainFolderId = mainFolder.data.id;
-    console.log(`Pasta principal criada com ID: ${mainFolderId}`);
+    console.log(`Main folder created with ID: ${mainFolderId}`);
     
     // Define subfolders to create
     const subfolders = [
@@ -127,7 +149,7 @@ Deno.serve(async (req) => {
     // Create subfolders
     const createdFolders = [];
     for (const folderName of subfolders) {
-      console.log(`Criando subpasta: ${folderName}`);
+      console.log(`Creating subfolder: ${folderName}`);
       try {
         const folder = await drive.files.create({
           requestBody: {
@@ -146,26 +168,31 @@ Deno.serve(async (req) => {
         if (folderName === 'Criativos' && folder.data.id) {
           const creativeFolderId = folder.data.id;
           
-          // Create "Fotos" subfolder
-          await drive.files.create({
-            requestBody: {
-              name: 'Fotos',
-              mimeType: 'application/vnd.google-apps.folder',
-              parents: [creativeFolderId],
-            },
-          });
-          
-          // Create "Vídeos" subfolder
-          await drive.files.create({
-            requestBody: {
-              name: 'Vídeos',
-              mimeType: 'application/vnd.google-apps.folder',
-              parents: [creativeFolderId],
-            },
-          });
+          try {
+            // Create "Fotos" subfolder
+            await drive.files.create({
+              requestBody: {
+                name: 'Fotos',
+                mimeType: 'application/vnd.google-apps.folder',
+                parents: [creativeFolderId],
+              },
+            });
+            
+            // Create "Vídeos" subfolder
+            await drive.files.create({
+              requestBody: {
+                name: 'Vídeos',
+                mimeType: 'application/vnd.google-apps.folder',
+                parents: [creativeFolderId],
+              },
+            });
+          } catch (subfolderError) {
+            console.error(`Error creating Criativos subfolders:`, subfolderError);
+            // Continue despite errors in creative subfolders
+          }
         }
       } catch (subfoldError) {
-        console.error(`Erro ao criar subpasta ${folderName}:`, subfoldError);
+        console.error(`Error creating subfolder ${folderName}:`, subfoldError);
         // Continue creating other folders even if one fails
       }
     }
@@ -173,7 +200,8 @@ Deno.serve(async (req) => {
     // If client has an email, add them as a viewer to the main folder
     if (client.email) {
       try {
-        await drive.permissions.create({
+        console.log(`Adding client email ${client.email} as viewer to folder`);
+        const permission = await drive.permissions.create({
           fileId: mainFolderId,
           requestBody: {
             role: 'reader',
@@ -182,28 +210,41 @@ Deno.serve(async (req) => {
           },
         });
         
-        console.log(`Added ${client.email} as a viewer to the folder`);
+        console.log(`Added ${client.email} as a viewer to the folder:`, permission.data);
       } catch (error) {
         console.error(`Error adding permission for ${client.email}:`, error);
         // Continue execution even if permission sharing fails
       }
+    } else {
+      console.log("No client email provided, skipping permission assignment");
     }
     
     // Update client record with the main folder ID
-    const { error: updateError } = await supabase
-      .from('clients')
-      .update({ drive_folder_id: mainFolderId })
-      .eq('id', client.id);
+    try {
+      const { error: updateError } = await supabase
+        .from('clients')
+        .update({ drive_folder_id: mainFolderId })
+        .eq('id', client.id);
+        
+      if (updateError) {
+        console.error("Error updating client with Drive folder ID:", updateError);
+        throw new Error('Failed to update client with Drive folder ID');
+      }
       
-    if (updateError) {
-      console.error("Error updating client with Drive folder ID:", updateError);
-      throw new Error('Falha ao atualizar cliente com ID da pasta do Google Drive');
+      console.log(`Updated client record ${client.id} with folder ID ${mainFolderId}`);
+    } catch (updateErr) {
+      console.error("Exception updating client record:", updateErr);
+      // Continue - we've created the folders, so this isn't critical
     }
+    
+    // Generate folder URL
+    const folderUrl = `https://drive.google.com/drive/folders/${mainFolderId}`;
     
     return new Response(
       JSON.stringify({ 
         success: true, 
         folder_id: mainFolderId,
+        folder_url: folderUrl,
         message: `Pastas criadas com sucesso para ${folderName}` 
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -213,7 +254,10 @@ Deno.serve(async (req) => {
     console.error("Error creating Drive folders:", error);
     
     return new Response(
-      JSON.stringify({ error: error.message || 'Erro ao criar pastas no Google Drive' }),
+      JSON.stringify({ 
+        error: error.message || 'Erro ao criar pastas no Google Drive',
+        stack: error.stack || 'No stack trace available'
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     )
   }
