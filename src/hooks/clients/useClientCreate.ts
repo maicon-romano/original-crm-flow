@@ -9,10 +9,15 @@ export const useClientCreate = (
   setClients?: (updater: (prevClients: Client[]) => Client[]) => void
 ) => {
   const [isCreating, setIsCreating] = useState(false);
+  const [driveFolderError, setDriveFolderError] = useState<string | null>(null);
+  const [inviteError, setInviteError] = useState<string | null>(null);
 
   const createClient = async (clientData: Omit<Client, 'id' | 'created_at' | 'updated_at'>) => {
     try {
       setIsCreating(true);
+      setDriveFolderError(null);
+      setInviteError(null);
+      
       console.log("Creating client:", clientData);
 
       // Validate required fields based on person_type
@@ -29,6 +34,7 @@ export const useClientCreate = (
         status: clientData.status || "active"
       };
       
+      // First, create the client in the database
       const { data, error } = await supabase
         .from('clients')
         .insert(insertData)
@@ -37,6 +43,7 @@ export const useClientCreate = (
       
       if (error) {
         console.error("Error creating client:", error);
+        toast.error(`Erro ao criar cliente: ${error.message}`);
         throw new Error(error.message);
       }
       
@@ -52,11 +59,26 @@ export const useClientCreate = (
         setClients(prevClients => [typedClient, ...prevClients]);
       }
 
+      // Show success toast
+      toast.success("Cliente criado com sucesso!");
+      
       // After client is created in database, process the additional operations in parallel
-      await Promise.all([
-        createGoogleDriveFolders(typedClient),
-        sendInvitationIfRequested(typedClient)
-      ]);
+      // but handle errors independently
+      try {
+        await createGoogleDriveFolders(typedClient);
+      } catch (driveError: any) {
+        setDriveFolderError(driveError.message);
+        // Don't throw here, we want to continue with invitation if possible
+      }
+      
+      try {
+        if (typedClient.send_email_invite) {
+          await sendInvitationIfRequested(typedClient);
+        }
+      } catch (inviteError: any) {
+        setInviteError(inviteError.message);
+        // Don't throw here, client creation is still successful
+      }
 
       // Notify parent component that client was created
       if (onClientCreated) {
@@ -66,6 +88,7 @@ export const useClientCreate = (
       return typedClient;
     } catch (error: any) {
       console.error("Exception creating client:", error);
+      toast.error(`Erro ao criar cliente: ${error.message || "Erro desconhecido"}`);
       throw new Error(error.message || "Erro ao criar cliente");
     } finally {
       setIsCreating(false);
@@ -102,9 +125,6 @@ export const useClientCreate = (
 
   // Create Google Drive folders for client
   const createGoogleDriveFolders = async (client: Client) => {
-    let driveFolderCreated = false;
-    let driveErrorMsg = "";
-    
     try {
       // Determine the correct folder name based on person type
       const folderName = client.person_type === "fisica" 
@@ -125,10 +145,11 @@ export const useClientCreate = (
         if (driveError) {
           console.error("Error creating Drive folders:", driveError);
           console.error("Drive error details:", driveError);
-          driveErrorMsg = driveError.message || "Erro desconhecido ao criar pastas";
+          toast.error(`Erro ao criar pastas do Google Drive: ${driveError.message || "Erro desconhecido"}`);
+          throw new Error(driveError.message || "Erro desconhecido ao criar pastas");
         } else if (driveData?.folder_id) {
           console.log("Drive folders created successfully:", driveData);
-          driveFolderCreated = true;
+          toast.success("Pastas do Google Drive criadas com sucesso!");
           
           // Update the client with the Drive folder ID
           await supabase
@@ -137,22 +158,19 @@ export const useClientCreate = (
             .eq('id', client.id);
         } else {
           console.error("No folder ID returned from create-drive-folders function", driveData);
-          driveErrorMsg = "API retornou dados incompletos";
+          toast.error("API retornou dados incompletos ao criar pastas");
+          throw new Error("API retornou dados incompletos");
         }
       } else {
-        driveErrorMsg = "Nome para criação da pasta não fornecido";
+        toast.error("Nome para criação da pasta não fornecido");
         console.error("Missing folder name for Drive folder creation");
+        throw new Error("Nome para criação da pasta não fornecido");
       }
     } catch (driveErr: any) {
       console.error("Exception creating Drive folders:", driveErr);
-      driveErrorMsg = driveErr.message || "Erro ao criar pastas no Google Drive";
-    }
-    
-    // Show appropriate toast based on Drive folder creation result
-    if (driveFolderCreated) {
-      toast.success("Pastas do Google Drive criadas com sucesso!");
-    } else {
-      toast.error(`Erro ao criar pastas no Google Drive: ${driveErrorMsg}. O cliente foi salvo, mas sem as pastas.`);
+      const errorMsg = driveErr.message || "Erro ao criar pastas no Google Drive";
+      toast.error(`Erro ao criar pastas no Google Drive: ${errorMsg}`);
+      throw new Error(errorMsg);
     }
   };
 
@@ -179,23 +197,29 @@ export const useClientCreate = (
         if (inviteError) {
           console.error("Error sending invitation:", inviteError);
           console.error("Invite error details:", inviteError);
-          toast.error("Erro ao enviar convite por e-mail");
+          toast.error(`Erro ao enviar convite: ${inviteError.message || "Erro desconhecido"}`);
+          throw new Error(inviteError.message || "Erro ao enviar convite");
         } else if (inviteData?.success) {
           console.log("Invitation sent successfully:", inviteData);
           toast.success("Convite enviado com sucesso!");
         } else {
           console.error("Unknown error in send-invitation function", inviteData);
           toast.error("Erro desconhecido ao enviar convite");
+          throw new Error("Erro desconhecido ao enviar convite");
         }
       } catch (inviteErr: any) {
         console.error("Exception sending invitation:", inviteErr);
-        toast.error("Erro ao enviar convite por e-mail: " + (inviteErr.message || "Erro desconhecido"));
+        const errorMsg = inviteErr.message || "Erro desconhecido";
+        toast.error(`Erro ao enviar convite por e-mail: ${errorMsg}`);
+        throw new Error(`Erro ao enviar convite por e-mail: ${errorMsg}`);
       }
     }
   };
 
   return {
     createClient,
-    isCreating
+    isCreating,
+    driveFolderError,
+    inviteError
   };
 };

@@ -10,7 +10,11 @@ Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { 
-      headers: corsHeaders,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
+      },
       status: 204 
     });
   }
@@ -33,7 +37,9 @@ Deno.serve(async (req) => {
     console.log("Received invitation request with data:", {
       email: requestBody.email,
       name: requestBody.name,
-      role: requestBody.role
+      role: requestBody.role,
+      company: requestBody.company,
+      password: requestBody.password ? "***PROVIDED***" : "NOT_PROVIDED"
     });
     
     const { 
@@ -155,6 +161,8 @@ Deno.serve(async (req) => {
       console.error("Missing Resend API key");
       throw new Error('API Key de email não configurada');
     }
+    
+    console.log("Email API key found with length:", emailApiKey ? emailApiKey.length : 0);
     
     // Create reset link
     const resetLink = `${applicationUrl}/reset-password`;

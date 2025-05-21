@@ -1,6 +1,7 @@
 
 import { useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 interface DriveFolder {
   id: string;
@@ -40,8 +41,10 @@ export const useDriveFolders = () => {
       
       if (error) {
         console.error("Error listing Drive folders:", error);
-        setError(error.message || "Erro ao listar pastas do Google Drive");
-        throw new Error(error.message || "Erro ao listar pastas do Google Drive");
+        const errorMessage = error.message || "Erro ao listar pastas do Google Drive";
+        setError(errorMessage);
+        toast.error(errorMessage);
+        throw new Error(errorMessage);
       }
       
       if (data?.folders) {
@@ -56,8 +59,10 @@ export const useDriveFolders = () => {
       return [];
     } catch (error: any) {
       console.error("Exception listing Drive folders:", error);
-      setError(error.message || "Erro ao listar pastas do Google Drive");
-      throw new Error(error.message || "Erro ao listar pastas do Google Drive");
+      const errorMessage = error.message || "Erro ao listar pastas do Google Drive";
+      setError(errorMessage);
+      toast.error(errorMessage);
+      throw new Error(errorMessage);
     } finally {
       setIsLoading(false);
     }

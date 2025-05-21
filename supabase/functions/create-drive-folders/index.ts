@@ -15,7 +15,11 @@ Deno.serve(async (req) => {
   // Handle CORS preflight requests - this is critical for browser requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { 
-      headers: corsHeaders,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
+      },
       status: 204 // Return 204 No Content for OPTIONS requests
     });
   }
@@ -62,15 +66,15 @@ Deno.serve(async (req) => {
     
     // Verify Google Drive credentials
     const googleClientEmail = Deno.env.get('GOOGLE_CLIENT_EMAIL');
-    const googlePrivateKey = Deno.env.get('GOOGLE_PRIVATE_KEY');
+    const googlePrivateKey = Deno.env.get('GOOGLE_PRIVATE_KEY')?.replace(/\\n/g, '\n');
     const rootFolderId = Deno.env.get('GOOGLE_DRIVE_ROOT_FOLDER_ID');
     
     // Log credential availability and details for debugging
     console.log("Google Drive credentials:", { 
-      clientEmail: googleClientEmail,
+      clientEmail: googleClientEmail ? `${googleClientEmail.substring(0, 5)}...` : "Missing",
       hasPrivateKey: !!googlePrivateKey,
       privateKeyLength: googlePrivateKey ? googlePrivateKey.length : 0,
-      rootFolderId
+      rootFolderId: rootFolderId || "Not set"
     });
     
     if (!googleClientEmail || !googlePrivateKey) {
@@ -89,7 +93,7 @@ Deno.serve(async (req) => {
       const jwtClient = new google.auth.JWT(
         googleClientEmail,
         undefined,
-        googlePrivateKey.replace(/\\n/g, '\n'),
+        googlePrivateKey,
         ['https://www.googleapis.com/auth/drive'],
         undefined
       );
