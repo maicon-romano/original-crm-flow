@@ -1,10 +1,9 @@
-
 import { useState, useEffect } from "react";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { Client } from "@/hooks/useClients";
-import { supabase } from "@/integrations/supabase/client";
+import { Client } from "@/types/client";
+import { useClients } from "@/hooks/useClients";
 import { CalendarIcon, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -99,6 +98,7 @@ interface ClientFormProps {
 export function ClientForm({ onComplete, client }: ClientFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isEditing = !!client;
+  const { createClient, updateClient } = useClients();
   
   const defaultValues: Partial<ClientFormValues> = {
     person_type: "juridica",
@@ -171,165 +171,38 @@ export function ClientForm({ onComplete, client }: ClientFormProps) {
       
       // If we're editing an existing client
       if (isEditing && client) {
-        const { error } = await supabase
-          .from('clients')
-          .update({
-            person_type: data.person_type,
-            legal_name: data.legal_name,
-            fantasy_name: data.fantasy_name,
-            company_name: data.company_name || data.fantasy_name,
-            contact_name: data.contact_name,
-            email: data.email,
-            phone: data.phone,
-            tax_id: data.tax_id,
-            cpf: data.cpf,
-            rg: data.rg,
-            state_registration: data.state_registration,
-            municipal_registration: data.municipal_registration,
-            responsible_name: data.responsible_name,
-            responsible_position: data.responsible_position,
-            address: data.address,
-            address_number: data.address_number,
-            address_complement: data.address_complement,
-            neighborhood: data.neighborhood,
-            city: data.city,
-            state: data.state,
-            zip_code: data.zip_code,
-            status: data.status,
-            client_source: data.client_source,
-            instagram: data.instagram,
-            website: data.website,
-            whatsapp_link: data.whatsapp_link,
-            other_social_media: data.other_social_media,
-            social_media: data.social_media,
-            paid_traffic: data.paid_traffic,
-            website_development: data.website_development,
-            contract_value: data.contract_value,
-            plan: data.plan,
-            notes: data.plan === "personalizado" ? data.custom_plan_details : data.notes,
-            contract_start: data.contract_start?.toISOString(),
-            contract_end: data.contract_end?.toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', client.id);
-        
-        if (error) throw error;
+        // Convert contract dates to ISO strings
+        const formattedData = {
+          ...data,
+          contract_start: data.contract_start?.toISOString(),
+          contract_end: data.contract_end?.toISOString(),
+          notes: data.plan === "personalizado" ? data.custom_plan_details : data.notes,
+        };
+
+        const updatedClient = await updateClient(client.id, formattedData);
         
         toast.success("Cliente atualizado com sucesso!");
         onComplete();
       } 
       // If we're creating a new client
       else {
-        const { data: clientData, error } = await supabase
-          .from('clients')
-          .insert({
-            person_type: data.person_type,
-            legal_name: data.legal_name,
-            fantasy_name: data.fantasy_name, 
-            company_name: data.company_name || data.fantasy_name,
-            contact_name: data.contact_name,
-            email: data.email,
-            phone: data.phone,
-            tax_id: data.tax_id,
-            cpf: data.cpf,
-            rg: data.rg,
-            state_registration: data.state_registration,
-            municipal_registration: data.municipal_registration,
-            responsible_name: data.responsible_name,
-            responsible_position: data.responsible_position,
-            address: data.address,
-            address_number: data.address_number,
-            address_complement: data.address_complement,
-            neighborhood: data.neighborhood,
-            city: data.city,
-            state: data.state,
-            zip_code: data.zip_code,
-            status: data.status,
-            client_source: data.client_source,
-            instagram: data.instagram,
-            website: data.website,
-            whatsapp_link: data.whatsapp_link,
-            other_social_media: data.other_social_media,
-            social_media: data.social_media,
-            paid_traffic: data.paid_traffic,
-            website_development: data.website_development,
-            contract_value: data.contract_value,
-            plan: data.plan,
-            notes: data.plan === "personalizado" ? data.custom_plan_details : data.notes,
-            contract_start: data.contract_start?.toISOString(),
-            contract_end: data.contract_end?.toISOString(),
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .select('*')
-          .single();
+        // Convert contract dates to ISO strings
+        const formattedData = {
+          ...data,
+          contract_start: data.contract_start?.toISOString(),
+          contract_end: data.contract_end?.toISOString(),
+          notes: data.plan === "personalizado" ? data.custom_plan_details : data.notes,
+        };
+
+        const newClient = await createClient(formattedData);
         
-        if (error) {
-          console.error("Error creating client:", error);
-          throw error;
-        }
-        
-        console.log("Client created successfully:", clientData);
-        
-        // Create Google Drive folders for the new client
-        if (clientData) {
-          try {
-            const createFoldersResponse = await supabase.functions.invoke('create-drive-folders', {
-              body: { client: clientData }
-            });
-            
-            if (createFoldersResponse.error) {
-              console.error("Error creating Drive folders:", createFoldersResponse.error);
-              toast.error("Cliente criado, mas não foi possível criar as pastas no Google Drive.");
-            } else {
-              console.log("Drive folders created:", createFoldersResponse.data);
-              toast.success("Cliente criado com sucesso e pastas criadas no Google Drive!");
-            }
-            
-            // If invite checkboxes are selected, send invites
-            if (data.send_email_invite || data.send_whatsapp_invite) {
-              // Generate a temporary password
-              const tempPassword = Math.random().toString(36).slice(-8);
-              
-              try {
-                const inviteResponse = await supabase.functions.invoke("send-invitation", {
-                  body: {
-                    email: data.email,
-                    name: data.person_type === "juridica" ? data.fantasy_name : data.contact_name,
-                    role: "client",
-                    position: data.responsible_position,
-                    phone: data.phone,
-                    password: tempPassword,
-                    send_whatsapp: data.send_whatsapp_invite,
-                    company: data.person_type === "juridica" ? data.legal_name : undefined
-                  }
-                });
-                
-                if (inviteResponse.error) {
-                  throw new Error(inviteResponse.error);
-                }
-                
-                toast.success("Convite enviado para o cliente");
-              } catch (inviteError) {
-                console.error("Error sending invitation:", inviteError);
-                toast.error("Erro ao enviar convite para o cliente");
-              }
-            }
-            
-            onComplete();
-          } catch (folderError) {
-            console.error("Exception creating Drive folders:", folderError);
-            toast.error("Cliente criado, mas ocorreu um erro ao criar as pastas no Google Drive.");
-            onComplete();
-          }
-        } else {
-          toast.success("Cliente criado com sucesso!");
-          onComplete();
-        }
+        toast.success("Cliente criado com sucesso!");
+        onComplete();
       }
     } catch (error: any) {
       console.error("Error submitting client form:", error);
       toast.error(error.message || "Erro ao salvar cliente");
+    } finally {
       setIsSubmitting(false);
     }
   };
