@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface DriveFolder {
@@ -17,8 +17,15 @@ interface DriveFolderResponse {
 export const useDriveFolders = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [folders, setFolders] = useState<DriveFolder[]>([]);
+  const hasFetched = useRef<Record<string, boolean>>({});
 
   const listFolders = async (folderId: string) => {
+    // Prevent duplicate fetches for the same folder ID
+    if (hasFetched.current[folderId]) {
+      console.log(`Already fetched folders for ID: ${folderId}, using cached results`);
+      return folders;
+    }
+
     try {
       setIsLoading(true);
       console.log(`Listing folders for Drive folder ID: ${folderId}`);
@@ -33,7 +40,11 @@ export const useDriveFolders = () => {
       }
       
       if (data?.folders) {
+        console.log(`Fetched ${data.folders.length} folders`);
         setFolders(data.folders);
+        
+        // Mark this folder ID as fetched
+        hasFetched.current[folderId] = true;
         return data.folders;
       }
       
@@ -46,9 +57,20 @@ export const useDriveFolders = () => {
     }
   };
 
+  const clearCache = (folderId?: string) => {
+    if (folderId) {
+      // Clear cache for specific folder
+      delete hasFetched.current[folderId];
+    } else {
+      // Clear entire cache
+      hasFetched.current = {};
+    }
+  };
+
   return {
     listFolders,
     folders,
-    isLoading
+    isLoading,
+    clearCache
   };
 };

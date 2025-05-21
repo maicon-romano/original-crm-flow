@@ -1,5 +1,4 @@
-
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -43,8 +42,8 @@ const clientFormSchema = z.object({
   
   // Contact information
   email: z.string().email({ message: "E-mail inválido" }),
-  phone: z.string().optional(),
-  responsible_name: z.string().optional(),
+  phone: z.string().min(1, { message: "Telefone é obrigatório" }),
+  responsible_name: z.string().min(1, { message: "Responsável é obrigatório" }),
   responsible_position: z.string().optional(),
   
   // Address
@@ -58,7 +57,7 @@ const clientFormSchema = z.object({
   
   // Internal organization
   contract_value: z.coerce.number().optional(),
-  plan: z.string().optional(),
+  plan: z.string().min(1, { message: "Plano é obrigatório" }),
   custom_plan_details: z.string().optional(),
   status: z.string().default("active"),
   client_source: z.string().optional(),
@@ -84,12 +83,34 @@ const clientFormSchema = z.object({
   
   // Notes
   notes: z.string().optional(),
-}).transform((data) => {
-  // Add conditional validation - if person_type is "juridica", company_name or fantasy_name are required
-  if (data.person_type === "juridica" && !data.company_name && !data.fantasy_name && !data.legal_name) {
-    throw new Error("Para pessoa jurídica, Razão Social ou Nome Fantasia é obrigatório");
+}).superRefine((data, ctx) => {
+  // Advanced validation based on person_type
+  if (data.person_type === "juridica") {
+    const hasCompanyName = !!data.company_name || !!data.fantasy_name || !!data.legal_name;
+    if (!hasCompanyName) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Para pessoa jurídica, Razão Social, Nome Fantasia ou Nome da Empresa é obrigatório",
+        path: ["company_name"],
+      });
+    }
+    
+    if (!data.tax_id) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "CNPJ é obrigatório para pessoa jurídica",
+        path: ["tax_id"],
+      });
+    }
+  } else if (data.person_type === "fisica") {
+    if (!data.cpf) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "CPF é obrigatório para pessoa física",
+        path: ["cpf"],
+      });
+    }
   }
-  return data;
 });
 
 type ClientFormValues = z.infer<typeof clientFormSchema>;
@@ -103,6 +124,7 @@ export function ClientForm({ onComplete, client: existingClient }: ClientFormPro
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isEditing = !!existingClient;
   const { createClient, updateClient } = useClients();
+  const formInitialized = useRef(false);
   
   const defaultValues: Partial<ClientFormValues> = {
     person_type: "juridica",
@@ -163,6 +185,10 @@ export function ClientForm({ onComplete, client: existingClient }: ClientFormPro
   
   // Effect to handle person_type change and update validations
   useEffect(() => {
+    if (!formInitialized.current) {
+      formInitialized.current = true;
+      return;
+    }
     form.trigger();
   }, [personType, form]);
   
@@ -620,7 +646,7 @@ export function ClientForm({ onComplete, client: existingClient }: ClientFormPro
                 name="plan"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Plano de Serviço</FormLabel>
+                    <FormLabel>Plano de Serviço *</FormLabel>
                     <Select 
                       onValueChange={field.onChange} 
                       defaultValue={field.value}
@@ -641,6 +667,7 @@ export function ClientForm({ onComplete, client: existingClient }: ClientFormPro
                     <FormDescription>
                       Selecione o plano de serviço contratado pelo cliente
                     </FormDescription>
+                    <FormMessage />
                   </FormItem>
                 )}
               />

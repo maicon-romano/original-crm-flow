@@ -11,6 +11,7 @@ export const useClientDelete = (
   const deleteClient = async (id: string) => {
     try {
       setIsDeleting(true);
+      console.log(`Attempting to delete client with ID: ${id}`);
       
       const { error } = await supabase
         .from('clients')
@@ -27,6 +28,7 @@ export const useClientDelete = (
         setClients(clients => clients.filter(client => client.id !== id));
       }
       
+      console.log(`Client with ID: ${id} successfully deleted`);
       return true;
     } catch (error: any) {
       console.error("Exception deleting client:", error);

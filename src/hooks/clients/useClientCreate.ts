@@ -15,6 +15,9 @@ export const useClientCreate = (
       setIsCreating(true);
       console.log("Creating client:", clientData);
 
+      // Validate required fields based on person_type
+      validateClientData(clientData);
+
       // Ensure required fields are present for database insertion
       const insertData: ClientInsert = {
         ...clientData,
@@ -49,8 +52,11 @@ export const useClientCreate = (
         setClients(prevClients => [typedClient, ...prevClients]);
       }
 
-      await createGoogleDriveFolders(typedClient);
-      await sendInvitationIfRequested(typedClient);
+      // After client is created in database, sequentially process the additional operations
+      await Promise.all([
+        createGoogleDriveFolders(typedClient),
+        sendInvitationIfRequested(typedClient)
+      ]);
 
       // Notify parent component that client was created
       if (onClientCreated) {
@@ -63,6 +69,34 @@ export const useClientCreate = (
       throw new Error(error.message || "Erro ao criar cliente");
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  // Validate client data based on person type
+  const validateClientData = (clientData: Omit<Client, 'id' | 'created_at' | 'updated_at'>) => {
+    const { person_type, contact_name, email, phone, responsible_name, plan, tax_id, company_name, fantasy_name, legal_name, cpf } = clientData;
+
+    const errors: string[] = [];
+
+    // Common validations for both person types
+    if (!email) errors.push("Email é obrigatório");
+    if (!phone) errors.push("Telefone é obrigatório");
+    if (!responsible_name) errors.push("Responsável é obrigatório");
+    if (!plan) errors.push("Plano é obrigatório");
+
+    // Specific validations based on person_type
+    if (person_type === "fisica") {
+      if (!contact_name) errors.push("Nome é obrigatório para pessoa física");
+      if (!cpf) errors.push("CPF é obrigatório para pessoa física");
+    } else if (person_type === "juridica") {
+      if (!company_name && !fantasy_name && !legal_name) {
+        errors.push("Razão Social ou Nome Fantasia é obrigatório para pessoa jurídica");
+      }
+      if (!tax_id) errors.push("CNPJ é obrigatório para pessoa jurídica");
+    }
+
+    if (errors.length > 0) {
+      throw new Error(`Por favor, verifique os campos: ${errors.join(", ")}`);
     }
   };
 
@@ -81,7 +115,11 @@ export const useClientCreate = (
         console.log(`Attempting to create Drive folders for client: ${folderName}`);
         
         const { data: driveData, error: driveError } = await supabase.functions.invoke('create-drive-folders', {
-          body: { client }
+          body: { 
+            client,
+            clientName: folderName,
+            clientEmail: client.email
+          }
         });
         
         if (driveError) {
