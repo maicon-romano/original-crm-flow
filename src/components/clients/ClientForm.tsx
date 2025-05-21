@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -14,7 +15,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Calendar } from "@/components/ui/calendar";
@@ -147,11 +147,11 @@ export function ClientForm({ onComplete, client: existingClient }: ClientFormPro
   
   const form = useForm<ClientFormValues>({
     resolver: zodResolver(clientFormSchema),
-    defaultValues: client ? {
+    defaultValues: existingClient ? {
       ...defaultValues,
-      ...client,
-      contract_start: client.contract_start ? new Date(client.contract_start) : undefined,
-      contract_end: client.contract_end ? new Date(client.contract_end) : undefined,
+      ...existingClient,
+      contract_start: existingClient.contract_start ? new Date(existingClient.contract_start) : undefined,
+      contract_end: existingClient.contract_end ? new Date(existingClient.contract_end) : undefined,
     } : defaultValues,
   });
   
@@ -173,11 +173,12 @@ export function ClientForm({ onComplete, client: existingClient }: ClientFormPro
     try {
       console.log("Submitting client form data:", data);
       
-      // Format the data for submission - remove custom_plan_details as it doesn't exist in the database
+      // Format the data for submission
       const formattedData = {
         ...data,
-        // Ensure person_type is required
+        // Ensure required fields are provided
         person_type: data.person_type || "juridica",
+        contact_name: data.contact_name || "", // Ensure contact_name is always provided
         // Format dates for storage
         contract_start: data.contract_start ? data.contract_start.toISOString() : undefined,
         contract_end: data.contract_end ? data.contract_end.toISOString() : undefined,
@@ -186,16 +187,16 @@ export function ClientForm({ onComplete, client: existingClient }: ClientFormPro
       };
       
       // Remove the custom_plan_details field as it doesn't exist in the database schema
-      delete (formattedData as any).custom_plan_details;
+      const { custom_plan_details, ...clientData } = formattedData;
 
       // If we're editing an existing client
-      if (isEditing && client) {
-        await updateClient(client.id, formattedData);
+      if (isEditing && existingClient) {
+        await updateClient(existingClient.id, clientData);
         toast.success("Cliente atualizado com sucesso!");
       } 
       // Otherwise create a new client
       else {
-        await createClient(formattedData);
+        await createClient(clientData);
         toast.success("Cliente criado com sucesso!");
       }
       
