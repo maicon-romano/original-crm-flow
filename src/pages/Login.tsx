@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ExclamationTriangleIcon } from "lucide-react";
+import { AlertTriangle } from "lucide-react"; // Changed from ExclamationTriangleIcon to AlertTriangle
 import { toast } from "sonner";
 
 const Login = () => {
@@ -53,7 +53,7 @@ const Login = () => {
         <div className="bg-white p-8 shadow-lg rounded-lg dark:bg-gray-800">
           {error && (
             <Alert variant="destructive" className="mb-6">
-              <ExclamationTriangleIcon className="h-4 w-4" />
+              <AlertTriangle className="h-4 w-4" /> {/* Changed icon */}
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}

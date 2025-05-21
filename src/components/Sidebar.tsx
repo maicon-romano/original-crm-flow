@@ -11,7 +11,7 @@ import {
   Send, 
   FileText, 
   ListTodo, 
-  FileContract, 
+  File,  // Replaced FileContract with File
   DollarSign,
   TicketCheck, 
   FolderOpen, 
@@ -23,7 +23,7 @@ import {
   ChevronDown,
   ChevronRight
 } from "lucide-react";
-import { useMobile } from "@/hooks/use-mobile";
+import { useIsMobile } from "@/hooks/use-mobile"; // Fixed hook name from useMobile to useIsMobile
 
 interface SidebarNavItem {
   title: string;
@@ -40,14 +40,14 @@ export function Sidebar() {
   const { user } = useSupabaseAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [navItems, setNavItems] = useState<SidebarNavItem[]>([]);
-  const { isMobile } = useMobile();
+  const { isMobile } = useIsMobile(); // Fixed hook usage
   
   // Determine if the user is an admin
   const isAdmin = user?.role === "admin";
   const isClient = user?.role === "client";
   
   // Log for debugging
-  console.log("Sidebar - User role:", user?.role, "userType:", user?.userType, "isAdmin:", isAdmin);
+  console.log("Sidebar - User role:", user?.role, "isAdmin:", isAdmin);
   
   useEffect(() => {
     // Define navigation items based on user role
@@ -90,7 +90,7 @@ export function Sidebar() {
         {
           title: "Contratos",
           href: "/contracts",
-          icon: <FileContract className="h-5 w-5" />,
+          icon: <File className="h-5 w-5" />, // Changed from FileContract to File
           adminOnly: true,
         },
         {
