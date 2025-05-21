@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -8,9 +8,10 @@ import { Loader2 } from "lucide-react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useSupabaseAuth } from "@/contexts/SupabaseAuthContext";
+import { DialogClose } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
 
 // Form schema for validation
 const userFormSchema = z.object({
@@ -19,78 +20,67 @@ const userFormSchema = z.object({
   phone: z.string().optional(),
   position: z.string().optional(),
   role: z.string().min(1, "Função é obrigatória"),
+  active: z.boolean().default(true),
 });
 
 type UserFormValues = z.infer<typeof userFormSchema>;
 
-interface UserFormProps {
-  onComplete: () => void;
-  user?: any; // For editing in the future
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  position?: string;
+  role: string;
+  active: boolean;
 }
 
-export const UserForm = ({ onComplete, user }: UserFormProps) => {
+interface UserEditDialogProps {
+  user: User;
+  onComplete: () => void;
+}
+
+export const UserEditDialog = ({ user, onComplete }: UserEditDialogProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { user: currentUser } = useSupabaseAuth();
   
-  // Initialize form
+  // Initialize form with user data
   const form = useForm<UserFormValues>({
     resolver: zodResolver(userFormSchema),
-    defaultValues: user || {
-      name: "",
-      email: "",
-      phone: "",
-      position: "",
-      role: "user",
+    defaultValues: {
+      name: user.name || "",
+      email: user.email || "",
+      phone: user.phone || "",
+      position: user.position || "",
+      role: user.role || "user",
+      active: user.active !== undefined ? user.active : true,
     },
   });
 
   const handleSubmit = async (data: UserFormValues) => {
-    if (!currentUser) {
-      toast.error("Você precisa estar logado para adicionar usuários");
-      return;
-    }
-
     try {
       setIsSubmitting(true);
       
-      const invitedBy = {
-        name: currentUser.name,
-        email: currentUser.email
-      };
-      
-      // Utilize a função Edge para enviar o convite
-      const { data: responseData, error } = await supabase.functions.invoke("send-invitation", {
-        body: {
-          email: data.email,
+      // Update user in the database
+      const { error } = await supabase
+        .from("users")
+        .update({
           name: data.name,
-          role: data.role,
+          email: data.email,
+          phone: data.phone,
           position: data.position,
-          phone: data.phone, // Adicionando o telefone
-          invitedBy
-        }
-      });
+          role: data.role,
+          active: data.active,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", user.id);
       
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
       
-      if (!responseData.success) {
-        throw new Error(responseData.error || "Erro ao criar usuário");
-      }
-      
-      toast.success(`${data.name} foi cadastrado com sucesso`, {
-        description: "Um email foi enviado com as instruções de acesso"
-      });
-      
+      toast.success("Usuário atualizado com sucesso");
       onComplete();
     } catch (error: any) {
-      console.error("Error creating user:", error);
-      
-      if (error.message?.includes("already taken")) {
-        toast.error("Este email já está em uso. Tente outro email.");
-      } else {
-        toast.error(error.message || "Ocorreu um erro ao criar o usuário.");
-      }
+      console.error("Error updating user:", error);
+      toast.error(error.message || "Erro ao atualizar usuário");
     } finally {
       setIsSubmitting(false);
     }
@@ -178,13 +168,36 @@ export const UserForm = ({ onComplete, user }: UserFormProps) => {
               </FormItem>
             )}
           />
+          
+          <FormField
+            control={form.control}
+            name="active"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                <div className="space-y-0.5">
+                  <FormLabel className="text-base">Status da conta</FormLabel>
+                  <FormDescription>
+                    Determina se o usuário pode fazer login no sistema
+                  </FormDescription>
+                </div>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
         </div>
         
         <div className="flex justify-end gap-3">
-          <Button variant="outline" type="button" onClick={onComplete}>Cancelar</Button>
+          <DialogClose asChild>
+            <Button variant="outline" type="button">Cancelar</Button>
+          </DialogClose>
           <Button type="submit" disabled={isSubmitting}>
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isSubmitting ? "Salvando..." : "Salvar Usuário"}
+            {isSubmitting ? "Salvando..." : "Salvar Alterações"}
           </Button>
         </div>
       </form>

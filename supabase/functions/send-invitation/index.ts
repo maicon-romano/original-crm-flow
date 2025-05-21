@@ -1,174 +1,181 @@
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
-import { Resend } from "npm:resend@2.0.0";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { SmtpClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts";
+import * as bcrypt from "https://deno.land/x/bcrypt@v0.4.1/mod.ts";
 
-// Obter variáveis de ambiente
-const resendApiKey = Deno.env.get("RESEND_API_KEY") || "";
-const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
-// Inicializar clientes
-const resend = new Resend(resendApiKey);
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-// Configurar cabeçalhos CORS
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface InviteRequest {
-  email: string;
-  name: string;
-  role: string;
-  position?: string;
-  invitedBy: {
-    name: string;
-    email: string;
-  };
-}
-
-serve(async (req: Request) => {
-  console.log("Received request:", req.method);
-  console.log("RESEND API Key available:", !!resendApiKey);
-  
-  // Tratar requisições de preflight CORS
-  if (req.method === "OPTIONS") {
-    console.log("Handling OPTIONS/preflight request");
-    return new Response(null, { 
-      status: 204, 
-      headers: corsHeaders 
+// Handle CORS preflight requests
+async function handleCors(req: Request) {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, {
+      headers: corsHeaders,
+      status: 204,
     });
   }
+}
 
+// Generate a temporary password
+function generateRandomPassword(length = 12) {
+  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()';
+  let result = '';
+  const charactersLength = characters.length;
+  
+  for (let i = 0; i < length; i++) {
+    result += characters.charAt(Math.floor(Math.random() * charactersLength));
+  }
+  
+  return result;
+}
+
+// Send invitation email via RESEND API
+async function sendInvitationEmail(to: string, name: string, temporaryPassword: string, invitedBy: any) {
   try {
-    if (req.method !== "POST") {
-      return new Response(
-        JSON.stringify({ success: false, error: "Method not allowed" }),
-        {
-          status: 405,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+    const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
+    
+    if (!RESEND_API_KEY) {
+      throw new Error("RESEND_API_KEY is not defined");
+    }
+    
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${RESEND_API_KEY}`,
+      },
+      body: JSON.stringify({
+        from: 'Original Digital <sistema@originaldigital.com.br>',
+        to: [to],
+        subject: 'Bem-vindo ao CRM da Original Digital',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2 style="color: #3b82f6;">Bem-vindo ao CRM da Original Digital!</h2>
+            <p>Olá <strong>${name}</strong>,</p>
+            <p>Você foi convidado por <strong>${invitedBy.name}</strong> para acessar o CRM da Original Digital.</p>
+            <p>Por favor, utilize as credenciais abaixo para fazer login:</p>
+            <div style="background-color: #f3f4f6; padding: 15px; border-radius: 5px; margin: 20px 0;">
+              <p><strong>Email:</strong> ${to}</p>
+              <p><strong>Senha temporária:</strong> ${temporaryPassword}</p>
+            </div>
+            <p style="margin-bottom: 30px;">Na primeira vez que você acessar, será solicitado que você crie uma nova senha.</p>
+            <a href="${SUPABASE_URL.replace('.supabase.co', '')}" style="background-color: #3b82f6; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Acessar CRM</a>
+            <p style="margin-top: 30px; color: #6b7280; font-size: 12px;">
+              Se você não esperava este email, por favor ignore-o ou entre em contato com o administrador do sistema.
+            </p>
+          </div>
+        `,
+      }),
+    });
+    
+    const data = await res.json();
+    
+    if (!res.ok) {
+      throw new Error(data.message || 'Failed to send email');
+    }
+    
+    console.log("Email sent successfully:", data);
+    return data;
+  } catch (error) {
+    console.error("Error sending email:", error);
+    throw error;
+  }
+}
+
+Deno.serve(async (req) => {
+  // Handle CORS
+  const corsResponse = await handleCors(req);
+  if (corsResponse) return corsResponse;
+  
+  try {
+    if (req.method !== 'POST') {
+      return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+        status: 405,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
-    const { email, name, role, position, invitedBy }: InviteRequest = await req.json();
-    console.log(`Processing invitation for ${email}`);
+    // Get request body
+    const { email, name, role, position, phone, invitedBy } = await req.json();
+    
+    // Validate required fields
+    if (!email || !name || !role) {
+      return new Response(JSON.stringify({ success: false, error: 'Missing required fields' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
-    // Gerar senha temporária
-    const tempPassword = Array(10)
-      .fill("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz")
-      .map(x => x[Math.floor(Math.random() * x.length)])
-      .join("");
-
-    // Criar o usuário no Supabase Auth
-    const { data: userData, error: userError } = await supabase.auth.admin.createUser({
+    // Initialize Supabase client with admin privileges
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    
+    // Generate temporary password
+    const temporaryPassword = generateRandomPassword(12);
+    
+    // Create the user in Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
       email,
-      password: tempPassword,
+      password: temporaryPassword,
       email_confirm: true,
-      user_metadata: { 
-        name, 
+      user_metadata: {
+        name,
         role,
-        position,
-        invited_by: invitedBy.email
       },
     });
+    
+    if (authError) {
+      throw new Error(authError.message);
+    }
 
+    // Insert user data in the users table
+    const { error: userError } = await supabase
+      .from('users')
+      .insert([
+        {
+          id: authData.user.id,
+          email: email,
+          name: name,
+          role: role,
+          position: position || null,
+          phone: phone || null,
+          active: true,
+          needs_password_reset: true,
+        }
+      ]);
+      
     if (userError) {
-      console.error("Error creating user:", userError);
-      return new Response(
-        JSON.stringify({ success: false, error: userError.message }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      // Rollback - delete the auth user if we couldn't create the user profile
+      await supabase.auth.admin.deleteUser(authData.user.id);
+      throw new Error(userError.message);
     }
-
-    // Atualizar informações adicionais na tabela public.users
-    const { error: updateError } = await supabase
-      .from("users")
-      .update({
-        phone: null,
-        position: position || null,
-        last_temp_password: tempPassword
-      })
-      .eq("id", userData.user.id);
-
-    if (updateError) {
-      console.error("Error updating user data:", updateError);
-    }
-
-    // Enviar email de convite usando Resend
-    const { data: emailData, error: emailError } = await resend.emails.send({
-      from: "Original Digital <contato@originaldigital.com.br>",
-      to: email,
-      subject: "Convite para o CRM da Original Digital",
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <div style="background-color: #2563eb; color: white; padding: 20px; text-align: center;">
-            <h1>Original Digital CRM</h1>
-          </div>
-          <div style="padding: 20px; border: 1px solid #e5e7eb; border-top: none;">
-            <p>Olá ${name},</p>
-            <p>Você foi convidado por <strong>${invitedBy.name}</strong> para participar do CRM da Original Digital.</p>
-            <p>Seus dados de acesso são:</p>
-            <p>
-              <strong>Email:</strong> ${email}<br>
-              <strong>Senha temporária:</strong> ${tempPassword}<br>
-              <strong>Função:</strong> ${role === 'admin' ? 'Administrador' : role === 'user' ? 'Funcionário' : 'Cliente'}
-            </p>
-            <div style="margin: 30px 0; text-align: center;">
-              <a href="https://crm.originaldigital.com.br/login" 
-                 style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px;">
-                Acessar o CRM
-              </a>
-            </div>
-            <p>Você deverá alterar sua senha no primeiro acesso.</p>
-            <p>Atenciosamente,<br>Equipe Original Digital</p>
-          </div>
-        </div>
-      `,
-    });
-
-    if (emailError) {
-      console.error("Error sending email:", emailError);
-      return new Response(
-        JSON.stringify({
-          success: true,
-          user: userData.user,
-          emailSent: false,
-          error: "Email could not be sent",
-        }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    console.log("Invitation sent successfully for:", email);
+    
+    // Send invitation email
+    await sendInvitationEmail(email, name, temporaryPassword, invitedBy);
+    
     return new Response(
-      JSON.stringify({
-        success: true,
-        user: userData.user,
-        emailSent: true,
-        email: emailData,
+      JSON.stringify({ 
+        success: true, 
+        message: 'User invited successfully',
+        user: { id: authData.user.id, email, name, role }  
       }),
       {
         status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );
-  } catch (error: any) {
-    console.error("Error processing invitation:", error.message);
+  } catch (error) {
+    console.error("Error processing invitation:", error);
+    
     return new Response(
-      JSON.stringify({ success: false, error: error.message }),
+      JSON.stringify({ success: false, error: error.message || 'An error occurred' }),
       {
         status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );
   }

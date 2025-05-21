@@ -75,6 +75,7 @@ const UpdatePassword = () => {
                 onChange={(e) => setPassword(e.target.value)} 
                 placeholder="********" 
                 required
+                autoComplete="new-password"
               />
             </div>
             
@@ -87,6 +88,7 @@ const UpdatePassword = () => {
                 onChange={(e) => setConfirmPassword(e.target.value)} 
                 placeholder="********" 
                 required
+                autoComplete="new-password"
               />
             </div>
             
