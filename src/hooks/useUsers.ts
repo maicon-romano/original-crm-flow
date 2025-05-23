@@ -5,7 +5,8 @@ import { db } from "@/lib/firebase";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 
-interface User {
+// Define a clear User interface for this hook
+export interface HookUser {
   id: string;
   name: string;
   email: string;
@@ -14,13 +15,13 @@ interface User {
   position?: string;
   role: string;
   active: boolean;
-  created_at?: string | number;
-  updated_at?: string | number;
-  last_login?: string | number;
+  created_at?: string;
+  updated_at?: string;
+  last_login?: string;
 }
 
 export const useUsers = () => {
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<HookUser[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const { user } = useAuth();
   const isMounted = useRef(true);
@@ -59,15 +60,21 @@ export const useUsers = () => {
           ...data,
           // Convert timestamps to ISO strings if they exist
           created_at: data.created_at ? 
-            (typeof data.created_at === 'object' ? data.created_at.toDate().toISOString() : data.created_at) : 
+            (typeof data.created_at === 'object' && data.created_at.toDate ? 
+              data.created_at.toDate().toISOString() : 
+              String(data.created_at)) : 
             undefined,
           updated_at: data.updated_at ? 
-            (typeof data.updated_at === 'object' ? data.updated_at.toDate().toISOString() : data.updated_at) : 
+            (typeof data.updated_at === 'object' && data.updated_at.toDate ? 
+              data.updated_at.toDate().toISOString() : 
+              String(data.updated_at)) : 
             undefined,
           last_login: data.last_login ? 
-            (typeof data.last_login === 'object' ? data.last_login.toDate().toISOString() : data.last_login) : 
+            (typeof data.last_login === 'object' && data.last_login.toDate ? 
+              data.last_login.toDate().toISOString() : 
+              String(data.last_login)) : 
             undefined
-        } as User;
+        } as HookUser;
       });
       
       if (isMounted.current) {

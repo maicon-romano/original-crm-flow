@@ -1,7 +1,7 @@
-
 import { useEffect, useState } from "react";
 import { useSupabaseAuth } from "@/contexts/SupabaseAuthContext";
-import { supabase } from "@/integrations/supabase/client";
+import { db } from "@/lib/firebase";
+import { collection, query, orderBy, getDocs } from "firebase/firestore";
 import { 
   Table, 
   TableBody, 
@@ -66,7 +66,7 @@ const Leads = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const { user } = useSupabaseAuth();
 
-  // Fetch leads from Supabase
+  // Fetch leads from Firestore
   useEffect(() => {
     const fetchLeads = async () => {
       if (!user) return;
@@ -74,20 +74,29 @@ const Leads = () => {
       try {
         setIsLoading(true);
         
-        // Fetch leads
-        const { data, error } = await supabase
-          .from("leads")
-          .select("*")
-          .order("created_at", { ascending: false });
+        // Fetch leads using Firebase
+        const leadsQuery = query(
+          collection(db, "leads"), 
+          orderBy("created_at", "desc")
+        );
         
-        if (error) {
-          console.error("Error fetching leads:", error);
-          toast.error("Erro ao carregar leads");
-          return;
-        }
+        const querySnapshot = await getDocs(leadsQuery);
+        const leadsData = querySnapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+            // Ensure created_at is a string
+            created_at: data.created_at instanceof Date 
+              ? data.created_at.toISOString() 
+              : typeof data.created_at === 'object' && data.created_at?.toDate 
+                ? data.created_at.toDate().toISOString()
+                : data.created_at || new Date().toISOString()
+          } as Lead;
+        });
         
-        console.log("Leads loaded:", data?.length || 0);
-        setLeads(data || []);
+        console.log("Leads loaded:", leadsData.length || 0);
+        setLeads(leadsData);
       } catch (error) {
         console.error("Exception fetching leads:", error);
         toast.error("Erro ao carregar leads");

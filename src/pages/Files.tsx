@@ -57,12 +57,12 @@ const FilesPage = () => {
       
       const snapshot = await getDocs(clientsQuery);
       const clientsList = snapshot.docs.map(doc => {
-        const data = doc.data();
+        const data = doc.data() as Client;
         return {
           id: doc.id,
           company_name: data.company_name,
           drive_folder_id: data.drive_folder_id
-        } as Client;
+        };
       });
       
       setClients(clientsList || []);

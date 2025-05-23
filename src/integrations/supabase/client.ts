@@ -73,11 +73,15 @@ export const supabase = {
       return { data: { subscription: { unsubscribe } } };
     },
     // Add verifyOtp method for UpdatePassword.tsx
-    verifyOtp: async ({token_hash, type}: {token_hash: string, type: string}) => {
-      // This is a simplified mock since Firebase handles OTP verification differently
-      console.log("Mock verifyOtp called with:", token_hash, type);
-      // Just return success for now - in Firebase this would be handled differently
-      return { data: {}, error: null };
+    verifyOtp: async ({ token_hash, type }: { token_hash: string, type: string }) => {
+      try {
+        // This is a simplified mock - in real Firebase code, you would use
+        // auth.verifyPasswordResetCode(code) and auth.confirmPasswordReset(code, newPassword)
+        console.log("Verifying OTP:", { token_hash, type });
+        return { data: { user: auth.currentUser }, error: null };
+      } catch (error) {
+        return { data: null, error };
+      }
     }
   },
   from: (tableName: string) => ({
@@ -187,7 +191,6 @@ export const supabase = {
       return { error: new Error("Not implemented") };
     }
   }),
-  // Mock functions API for compatibility
   functions: {
     invoke: async (functionName: string, { body }: { body: any }) => {
       console.warn(`DEPRECATED: Attempt to call Supabase function ${functionName}, using Firebase implementation`);

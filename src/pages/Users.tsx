@@ -6,6 +6,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { UsersList } from "@/components/users/UsersList";
 import { UsersHeader } from "@/components/users/UsersHeader";
 import { useUsers } from "@/hooks/useUsers";
+import type { HookUser } from "@/hooks/useUsers";
 
 const UsersPage = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -59,7 +60,7 @@ const UsersPage = () => {
         onUserAdded={refreshUsers} 
       />
       <UsersList 
-        users={filteredUsers} 
+        users={filteredUsers as any[]} 
         isLoading={isLoading} 
         onRefresh={refreshUsers} 
       />
