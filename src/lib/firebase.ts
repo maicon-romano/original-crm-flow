@@ -4,12 +4,13 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBvhI8C2AzSRg5FCR1jECGj5YhfYsbqycI",
-  authDomain: "crm-originaldigital.firebaseapp.com",
-  projectId: "crm-originaldigital",
-  storageBucket: "crm-originaldigital.appspot.com",
-  messagingSenderId: "1043972873648",
-  appId: "1:1043972873648:web:2b6dc0092027c1974e4526"
+  apiKey: "AIzaSyCx56ood3nMsLVW8kQGfIahPB6DbaKK0d4",
+  authDomain: "finsync-23285.firebaseapp.com",
+  projectId: "finsync-23285",
+  storageBucket: "finsync-23285.firebasestorage.app",
+  messagingSenderId: "1037827187530",
+  appId: "1:1037827187530:web:2e6d6fe535a2f804ea57b3",
+  measurementId: "G-N45NBCW0CR"
 };
 
 // Initialize Firebase
