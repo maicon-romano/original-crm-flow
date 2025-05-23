@@ -8,8 +8,6 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle, Loader2, Eye, EyeOff } from "lucide-react"; 
 import { toast } from "sonner";
-import { auth } from "@/lib/firebase";
-import { createUserWithEmailAndPassword } from "firebase/auth";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -17,7 +15,6 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [isCreatingAccount, setIsCreatingAccount] = useState(false);
   const { login, isAuthenticated, user } = useSupabaseAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -42,32 +39,13 @@ const Login = () => {
     setIsSubmitting(true);
 
     try {
-      if (isCreatingAccount) {
-        // Criar uma nova conta
-        await createUserWithEmailAndPassword(auth, email, password);
-        toast.success("Conta criada com sucesso! Faça login para continuar.");
-        setIsCreatingAccount(false);
-      } else {
-        // Login normal
-        await login(email, password);
-        toast.success("Login bem-sucedido!");
-      }
+      // Login normal
+      await login(email, password);
+      toast.success("Login bem-sucedido!");
       // Navigation will happen via the useEffect hook above
     } catch (err: any) {
       console.error("Login error:", err);
-      
-      if (isCreatingAccount) {
-        if (err.code === "auth/email-already-in-use") {
-          setError("Este email já está em uso. Tente fazer login.");
-          setIsCreatingAccount(false);
-        } else if (err.code === "auth/weak-password") {
-          setError("A senha deve ter pelo menos 6 caracteres.");
-        } else {
-          setError(err.message || "Erro ao criar conta. Tente novamente.");
-        }
-      } else {
-        setError(err.message || "Erro ao fazer login. Verifique suas credenciais.");
-      }
+      setError(err.message || "Erro ao fazer login. Verifique suas credenciais.");
     } finally {
       setIsSubmitting(false);
     }
@@ -77,20 +55,13 @@ const Login = () => {
     setShowPassword(!showPassword);
   };
 
-  const toggleCreatingAccount = () => {
-    setError("");
-    setIsCreatingAccount(!isCreatingAccount);
-  };
-
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/40 p-4 dark:bg-gray-900">
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
           <h2 className="text-3xl font-bold tracking-tight text-primary">Original Digital CRM</h2>
           <p className="mt-2 text-gray-500 dark:text-gray-400">
-            {isCreatingAccount 
-              ? "Crie uma nova conta para acessar o sistema" 
-              : "Entre com suas credenciais para acessar o sistema"}
+            Entre com suas credenciais para acessar o sistema
           </p>
         </div>
         
@@ -119,14 +90,12 @@ const Login = () => {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Senha</Label>
-                {!isCreatingAccount && (
-                  <Link 
-                    to="/reset-password" 
-                    className="text-sm text-blue-600 hover:underline dark:text-blue-400"
-                  >
-                    Esqueceu a senha?
-                  </Link>
-                )}
+                <Link 
+                  to="/reset-password" 
+                  className="text-sm text-blue-600 hover:underline dark:text-blue-400"
+                >
+                  Esqueceu a senha?
+                </Link>
               </div>
               <div className="relative">
                 <Input 
@@ -136,7 +105,7 @@ const Login = () => {
                   onChange={(e) => setPassword(e.target.value)} 
                   placeholder="********" 
                   required
-                  autoComplete={isCreatingAccount ? "new-password" : "current-password"}
+                  autoComplete="current-password"
                 />
                 <button 
                   type="button"
@@ -156,23 +125,15 @@ const Login = () => {
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {isCreatingAccount ? "Criando conta..." : "Entrando..."}
+                  Entrando...
                 </>
               ) : (
-                isCreatingAccount ? "Criar conta" : "Entrar"
+                "Entrar"
               )}
             </Button>
 
-            <div className="text-center text-sm">
-              <button
-                type="button"
-                onClick={toggleCreatingAccount}
-                className="text-blue-600 hover:underline dark:text-blue-400"
-              >
-                {isCreatingAccount 
-                  ? "Já tem uma conta? Entre aqui" 
-                  : "Não tem uma conta? Crie uma aqui"}
-              </button>
+            <div className="text-center text-sm text-gray-500">
+              Contate um administrador para criar uma nova conta.
             </div>
           </form>
         </div>
