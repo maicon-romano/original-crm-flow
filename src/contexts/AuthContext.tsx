@@ -1,34 +1,34 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { 
-  signInWithEmailAndPassword, 
-  signOut as firebaseSignOut, 
-  onAuthStateChanged,
-  sendPasswordResetEmail as firebaseSendResetEmail
-} from "firebase/auth";
-import { doc, getDoc, collection, query, where, getDocs, updateDoc } from "firebase/firestore";
+import { User } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail, updatePassword } from "firebase/auth";
+import { doc, getDoc, updateDoc, setDoc } from "firebase/firestore";
+import { toast } from "sonner";
 
 // Define user roles
-export type UserRole = "admin" | "user" | "client" | "cliente" | "funcionario" | "usuario";
+export type UserRole = "admin" | "user" | "client";
 
 // Define user interface
-export interface User {
+export interface AuthUser {
   id: string;
   name: string;
   email: string;
   role: UserRole;
-  userType?: string;
-  avatar?: string;
-  precisa_redefinir_senha?: boolean;
-  createdAt?: Date | number;
-  lastLogin?: Date | number;
+  position?: string;
+  phone?: string;
+  avatar_url?: string;
+  needs_password_reset?: boolean;
+  active?: boolean;
+  createdAt?: Date | string;
+  lastLogin?: Date | string;
 }
 
 interface AuthContextType {
-  user: User | null;
+  user: AuthUser | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   updateUserPassword: (newPassword: string) => Promise<void>;
   isAuthenticated: boolean;
@@ -36,238 +36,198 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+// Check if a user is a reserved admin user
+const isReservedAdmin = (email: string): boolean => {
+  const adminEmails = [
+    "originaldigitaloficial@gmail.com",
+    "maicon.romano@originaldigital.com.br"
+  ];
+  return adminEmails.includes(email.toLowerCase());
+};
 
-  // Helper function to determine role with priority on admin status
-  const determineRole = (userData: any): UserRole => {
-    // Check all possible admin indicators with more explicit logging
-    console.log("Determining role from data:", {
-      role: userData.role,
-      userType: userData.userType,
-      tipo_usuario: userData.tipo_usuario
-    });
-    
-    // Force admin based on the user's email if it matches
-    if (userData.email === "maicon.romano@originaldigital.com.br") {
-      console.log("User is Maicon Romano - forcing admin role");
-      return "admin";
+// Clean up auth state
+const cleanupAuthState = () => {
+  // Remove any auth-related data from localStorage
+  localStorage.removeItem('crmUser');
+  
+  // Remove any other auth tokens if needed
+  Object.keys(localStorage).forEach((key) => {
+    if (key.startsWith('firebase:auth') || key.includes('user')) {
+      localStorage.removeItem(key);
     }
-    
-    if (
-      userData.role === "admin" || 
-      userData.userType === "admin" ||
-      userData.tipo_usuario === "admin"
-    ) {
-      console.log("User has admin privileges");
-      return "admin";
-    } else if (userData.role === "client" || userData.role === "cliente") {
-      return "client";
-    } else {
-      return userData.role || "user";
-    }
-  };
+  });
+};
+
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [loading, setLoading] = useState(true);
+  const firstLoadComplete = React.useRef(false);
 
   // Listen for authentication state changes
   useEffect(() => {
-    console.log("Setting up auth state listener");
+    console.log("Setting up Firebase auth state listener");
+    
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      setLoading(true);
-      console.log("Auth state changed:", firebaseUser ? firebaseUser.email : "No user");
+      console.log("Auth state changed:", firebaseUser?.email);
       
       if (firebaseUser) {
-        try {
-          console.log("Fetching user data for:", firebaseUser.uid, firebaseUser.email);
+        // Defer profile fetch to avoid issues
+        setTimeout(() => fetchUserProfile(firebaseUser), 0);
+      } else {
+        setUser(null);
+        setLoading(false);
+        firstLoadComplete.current = true;
+      }
+    });
+    
+    return () => unsubscribe();
+  }, []);
+
+  // Function to fetch user profile data
+  const fetchUserProfile = async (firebaseUser: User) => {
+    try {
+      console.log("Fetching user profile for:", firebaseUser.uid);
+      setLoading(true);
+      
+      // Get user data from Firestore
+      const userRef = doc(db, "users", firebaseUser.uid);
+      const userSnapshot = await getDoc(userRef);
+      
+      if (!userSnapshot.exists()) {
+        console.log("No user profile found, checking if reserved admin");
+        
+        // Handle reserved admin users specially
+        if (firebaseUser.email && isReservedAdmin(firebaseUser.email)) {
+          console.log("Creating admin profile for:", firebaseUser.email);
           
-          // Force admin role for specific email - for testing/backup
-          if (firebaseUser.email === "maicon.romano@originaldigital.com.br") {
-            console.log("Setting admin role for Maicon Romano");
-            const adminUser: User = {
+          const adminName = firebaseUser.email === "originaldigitaloficial@gmail.com" 
+            ? "Admin Original Digital" 
+            : "Maicon Romano";
+          
+          const adminPosition = firebaseUser.email === "originaldigitaloficial@gmail.com"
+            ? "Administrador Principal"
+            : "CGO - Diretor Executivo de Crescimento";
+            
+          const adminUser: AuthUser = {
+            id: firebaseUser.uid,
+            name: adminName,
+            email: firebaseUser.email,
+            role: "admin",
+            position: adminPosition,
+            active: true,
+            needs_password_reset: false
+          };
+          
+          // Create the admin user in Firestore
+          try {
+            await setDoc(userRef, { 
               id: firebaseUser.uid,
-              name: "Maicon Romano",
+              name: adminName,
               email: firebaseUser.email,
               role: "admin",
-              userType: "admin",
-              lastLogin: new Date().getTime()
-            };
-            
-            setUser(adminUser);
-            localStorage.setItem("crmUser", JSON.stringify(adminUser));
-            setLoading(false);
-            return;
-          }
-          
-          // Try multiple collections - "usuarios" first (matches Firebase rules)
-          let userDoc = await getDoc(doc(db, "usuarios", firebaseUser.uid)).catch(err => {
-            console.log("Error fetching from usuarios collection:", err);
-            return null;
-          });
-          
-          let userData = null;
-          let collectionUsed = "";
-          
-          if (userDoc && userDoc.exists()) {
-            userData = userDoc.data();
-            collectionUsed = "usuarios";
-            console.log("User found in 'usuarios' collection:", userData);
-          } else {
-            // If not in "usuarios", try "users" collection
-            const usersDoc = await getDoc(doc(db, "users", firebaseUser.uid)).catch(err => {
-              console.log("Error fetching from users collection:", err);
-              return null;
+              position: adminPosition,
+              active: true,
+              needs_password_reset: false,
+              created_at: new Date().toISOString()
             });
-            
-            if (usersDoc && usersDoc.exists()) {
-              userData = usersDoc.data();
-              collectionUsed = "users";
-              console.log("User found in 'users' collection:", userData);
-            }
+            console.log("Admin user created successfully");
+          } catch (createError) {
+            console.error("Error creating admin user:", createError);
           }
           
-          // Check if user exists in clients collection as a fallback
-          const clientDoc = await getDoc(doc(db, "clientes", firebaseUser.uid)).catch(err => {
-            console.log("Error fetching from clientes collection:", err);
-            return null;
-          });
-          
-          // Process user data if found
-          if (userData) {
-            console.log("Processing user data:", userData);
-            
-            // Determine role with priority check on admin status
-            const effectiveRole = determineRole(userData);
-            console.log("Determined user role:", effectiveRole);
-            
-            const currentUser: User = {
-              id: firebaseUser.uid,
-              name: userData.name || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
-              email: userData.email || firebaseUser.email || '',
-              role: effectiveRole,
-              userType: userData.userType || (effectiveRole === "admin" ? "admin" : undefined),
-              avatar: userData.avatar,
-              precisa_redefinir_senha: userData.precisa_redefinir_senha,
-              createdAt: userData.createdAt,
-              lastLogin: new Date().getTime()
-            };
-            
-            console.log("Processed user data:", currentUser);
-            
-            // Update lastLogin time
-            try {
-              if (collectionUsed) {
-                await updateDoc(doc(db, collectionUsed, firebaseUser.uid), {
-                  lastLogin: new Date().getTime()
-                });
-              }
-            } catch (updateError) {
-              console.error("Error updating lastLogin:", updateError);
-            }
-            
-            setUser(currentUser);
-            localStorage.setItem("crmUser", JSON.stringify(currentUser));
-          } 
-          // Handle client user case
-          else if (clientDoc && clientDoc.exists()) {
-            console.log("User found in clientes collection");
-            const clientData = clientDoc.data();
-            
-            // For client users, use companyName as name
-            const currentUser: User = {
-              id: firebaseUser.uid,
-              name: clientData.companyName || clientData.contactName || firebaseUser.email?.split('@')[0] || 'Client',
-              email: clientData.email || firebaseUser.email || '',
-              role: (clientData.role as UserRole) || "client",
-              avatar: clientData.avatar,
-              precisa_redefinir_senha: clientData.precisa_redefinir_senha,
-              createdAt: clientData.createdAt,
-              lastLogin: new Date().getTime()
-            };
-            
-            // Update lastLogin time
-            try {
-              await updateDoc(doc(db, "clientes", firebaseUser.uid), {
-                lastLogin: new Date().getTime()
-              });
-            } catch (updateError) {
-              console.error("Error updating lastLogin:", updateError);
-            }
-            
-            setUser(currentUser);
-            localStorage.setItem("crmUser", JSON.stringify(currentUser));
-          } 
-          // Create minimal user profile based on Firebase user as fallback
-          else {
-            console.log("No user data found, creating minimal profile based on Firebase auth");
-            
-            // Special handling for known admin emails
-            const effectiveRole = firebaseUser.email === "maicon.romano@originaldigital.com.br" ? "admin" : "user";
-            const effectiveUserType = firebaseUser.email === "maicon.romano@originaldigital.com.br" ? "admin" : undefined;
-            
-            const defaultUser: User = {
-              id: firebaseUser.uid,
-              name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
-              email: firebaseUser.email || '',
-              role: effectiveRole,
-              userType: effectiveUserType
-            };
-            
-            console.log("Created minimal user profile:", defaultUser);
-            setUser(defaultUser);
-            localStorage.setItem("crmUser", JSON.stringify(defaultUser));
-          }
-        } catch (error) {
-          console.error("Error fetching user data:", error);
-          
-          // Create a minimal user profile based on Firebase user as fallback
-          // Special handling for known admin emails
-          const effectiveRole = firebaseUser.email === "maicon.romano@originaldigital.com.br" ? "admin" : "user";
-          const effectiveUserType = firebaseUser.email === "maicon.romano@originaldigital.com.br" ? "admin" : undefined;
-          
-          const defaultUser: User = {
+          setUser(adminUser);
+          localStorage.setItem("crmUser", JSON.stringify(adminUser));
+        } else {
+          // Create a minimal profile based on auth user
+          const defaultUser: AuthUser = {
             id: firebaseUser.uid,
             name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
             email: firebaseUser.email || '',
-            role: effectiveRole,
-            userType: effectiveUserType
+            role: "user",
           };
-          
-          console.log("Created minimal user profile due to error:", defaultUser);
           setUser(defaultUser);
           localStorage.setItem("crmUser", JSON.stringify(defaultUser));
         }
       } else {
-        // No Firebase user, clear local user
-        setUser(null);
-        localStorage.removeItem("crmUser");
+        const userData = userSnapshot.data();
+        console.log("User profile found:", userData);
+        
+        // Check if user is active
+        if (userData.active === false) {
+          console.log("User account is inactive");
+          toast.error("Sua conta está inativa. Entre em contato com o administrador.");
+          await auth.signOut();
+          cleanupAuthState();
+          setUser(null);
+          return;
+        }
+        
+        // Process user data
+        const currentUser: AuthUser = {
+          id: userData.id || firebaseUser.uid,
+          name: userData.name || firebaseUser.displayName || '',
+          email: userData.email || firebaseUser.email || '',
+          role: userData.role as UserRole,
+          position: userData.position,
+          phone: userData.phone,
+          avatar_url: userData.avatar_url,
+          needs_password_reset: userData.needs_password_reset,
+          active: userData.active,
+          createdAt: userData.created_at,
+          lastLogin: userData.last_login
+        };
+        
+        // Update last login time only if not requiring password reset
+        if (!userData.needs_password_reset) {
+          try {
+            await updateDoc(userRef, { 
+              last_login: new Date().toISOString() 
+            });
+          } catch (updateError) {
+            console.error("Error updating last login:", updateError);
+          }
+        }
+        
+        setUser(currentUser);
+        localStorage.setItem("crmUser", JSON.stringify(currentUser));
       }
+    } catch (error) {
+      console.error("Error in fetchUserProfile:", error);
       
+      // Create a minimal profile as fallback
+      if (firebaseUser) {
+        const defaultUser: AuthUser = {
+          id: firebaseUser.uid,
+          name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+          email: firebaseUser.email || '',
+          role: "user",
+        };
+        setUser(defaultUser);
+        localStorage.setItem("crmUser", JSON.stringify(defaultUser));
+      }
+    } finally {
       setLoading(false);
-    });
+      firstLoadComplete.current = true;
+    }
+  };
 
-    return () => unsubscribe();
-  }, []);
-
+  // Login function
   const login = async (email: string, password: string) => {
     setLoading(true);
     console.log("Attempting login for:", email);
     
     try {
-      // Try Firebase authentication
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      console.log("Firebase login successful:", userCredential.user.email);
+      // Clean up existing state first
+      cleanupAuthState();
       
-      // User data will be set by the onAuthStateChanged listener
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      console.log("Login successful for:", email);
       return;
     } catch (error: any) {
-      console.error("Firebase login error:", error);
+      console.error("Login error:", error);
       
-      if (error.code === 'auth/invalid-credential') {
+      if (error.code === "auth/invalid-credential") {
         throw new Error("Email ou senha inválidos");
-      } else if (error.code === 'auth/user-not-found') {
-        throw new Error("Usuário não encontrado");
-      } else if (error.code === 'auth/wrong-password') {
-        throw new Error("Senha incorreta");
       } else {
         throw new Error(error.message || "Erro ao fazer login");
       }
@@ -276,57 +236,70 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // Logout function
   const logout = async () => {
     try {
       console.log("Logging out");
-      await firebaseSignOut(auth);
+      
+      // Clean up auth state
+      cleanupAuthState();
+      
+      await signOut(auth);
+      
       localStorage.removeItem("crmUser");
       setUser(null);
     } catch (error) {
       console.error("Logout error:", error);
-      // Force logout even if there's an error
+      // Force logout even on error
       localStorage.removeItem("crmUser");
       setUser(null);
     }
   };
   
+  // Reset password function
   const resetPassword = async (email: string) => {
     try {
-      await firebaseSendResetEmail(auth, email);
+      await sendPasswordResetEmail(auth, email);
       console.log("Password reset email sent to:", email);
       return;
     } catch (error: any) {
       console.error("Error sending reset password email:", error);
-      if (error.code === 'auth/user-not-found') {
-        throw new Error("Email não encontrado");
-      }
       throw new Error(error.message || "Erro ao enviar email de redefinição");
     }
   };
   
+  // Update password function
   const updateUserPassword = async (newPassword: string) => {
-    if (!auth.currentUser) {
-      throw new Error("Nenhum usuário autenticado encontrado");
-    }
-    
     try {
-      // In a real implementation, we would use updatePassword from firebase/auth
-      // For now, just update the precisa_redefinir_senha flag
+      const currentUser = auth.currentUser;
       
-      if (user) {
-        const isClient = user.role === "client" || user.role === "cliente";
-        const collectionPath = isClient ? "clientes" : "users";
-        
-        await updateDoc(doc(db, collectionPath, user.id), {
-          precisa_redefinir_senha: false,
-          updatedAt: new Date().getTime()
+      if (!currentUser) {
+        throw new Error("Nenhum usuário autenticado encontrado");
+      }
+      
+      console.log("Updating password for the user");
+      
+      await updatePassword(currentUser, newPassword);
+      
+      // Update the needs_password_reset flag in Firestore
+      const userRef = doc(db, "users", currentUser.uid);
+      const userSnapshot = await getDoc(userRef);
+      
+      if (userSnapshot.exists()) {
+        await updateDoc(userRef, { 
+          needs_password_reset: false,
+          updated_at: new Date().toISOString()
         });
         
-        // Update local user object
-        const updatedUser = { ...user, precisa_redefinir_senha: false };
-        setUser(updatedUser);
-        localStorage.setItem("crmUser", JSON.stringify(updatedUser));
+        // Update local user object if it exists
+        if (user && user.id === currentUser.uid) {
+          const updatedUser = { ...user, needs_password_reset: false };
+          setUser(updatedUser);
+          localStorage.setItem("crmUser", JSON.stringify(updatedUser));
+        }
       }
+      
+      toast.success("Senha atualizada com sucesso");
     } catch (error: any) {
       console.error("Error updating user password:", error);
       throw new Error(error.message || "Erro ao atualizar a senha");
@@ -340,7 +313,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     logout,
     resetPassword,
     updateUserPassword,
-    isAuthenticated: !!user,
+    isAuthenticated: !!auth.currentUser,
   };
 
   return (
