@@ -1,7 +1,5 @@
-
 import { useState, useEffect } from "react";
 import { Bell, LogOut, Moon, Sun, User, Settings } from "lucide-react";
-import { useSupabaseAuth } from "@/contexts/SupabaseAuthContext";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -28,29 +26,29 @@ export function Header() {
   const { user, logout } = useSupabaseAuth();
   const { theme, setTheme } = useTheme();
   const [notifications, setNotifications] = useState<any[]>([]);
-  
+
   useEffect(() => {
     // Fetch notifications (mock data for now)
     setNotifications([
       {
-        id: '1',
-        title: 'Nova tarefa',
-        message: 'Você foi designado para uma nova tarefa',
+        id: "1",
+        title: "Nova tarefa",
+        message: "Você foi designado para uma nova tarefa",
         read: false,
-        time: '10m'
+        time: "10m",
       },
       {
-        id: '2',
-        title: 'Lembrete',
-        message: 'Reunião com o cliente em 1 hora',
+        id: "2",
+        title: "Lembrete",
+        message: "Reunião com o cliente em 1 hora",
         read: true,
-        time: '1h'
-      }
+        time: "1h",
+      },
     ]);
   }, []);
-  
-  const unreadCount = notifications.filter(n => !n.read).length;
-  
+
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
   const handleLogout = async () => {
     try {
       await logout();
@@ -60,16 +58,16 @@ export function Header() {
       toast.error("Erro ao fazer logout");
     }
   };
-  
+
   const getInitials = (name: string) => {
     return name
-      .split(' ')
+      .split(" ")
       .map((n) => n[0])
-      .join('')
+      .join("")
       .toUpperCase()
       .substring(0, 2);
   };
-  
+
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background px-6 dark:bg-gray-800 dark:border-gray-700">
       <div className="flex-1"></div>
@@ -101,7 +99,7 @@ export function Header() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        
+
         {/* Notifications */}
         <Popover>
           <PopoverTrigger asChild>
@@ -118,7 +116,9 @@ export function Header() {
             <div className="space-y-2">
               <h4 className="font-medium leading-none">Notificações</h4>
               <p className="text-sm text-muted-foreground">
-                {unreadCount ? `Você tem ${unreadCount} notificações não lidas` : 'Nenhuma notificação não lida'}
+                {unreadCount
+                  ? `Você tem ${unreadCount} notificações não lidas`
+                  : "Nenhuma notificação não lida"}
               </p>
             </div>
             <div className="mt-2 max-h-80 overflow-auto">
@@ -131,13 +131,17 @@ export function Header() {
                   <div
                     key={notification.id}
                     className={`flex items-start gap-4 p-2 rounded-lg ${
-                      !notification.read ? 'bg-muted' : ''
+                      !notification.read ? "bg-muted" : ""
                     }`}
                   >
                     <div className="flex-1 space-y-1">
                       <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium">{notification.title}</p>
-                        <span className="text-xs text-muted-foreground">{notification.time}</span>
+                        <p className="text-sm font-medium">
+                          {notification.title}
+                        </p>
+                        <span className="text-xs text-muted-foreground">
+                          {notification.time}
+                        </span>
                       </div>
                       <p className="text-sm">{notification.message}</p>
                     </div>
@@ -152,14 +156,19 @@ export function Header() {
             </div>
           </PopoverContent>
         </Popover>
-        
+
         {/* User Menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="relative h-8 w-8 rounded-full">
               <Avatar>
-                <AvatarImage src={user?.avatar_url || undefined} alt={user?.name || ""} />
-                <AvatarFallback>{user ? getInitials(user.name) : "?"}</AvatarFallback>
+                <AvatarImage
+                  src={user?.avatar_url || undefined}
+                  alt={user?.name || ""}
+                />
+                <AvatarFallback>
+                  {user ? getInitials(user.name) : "?"}
+                </AvatarFallback>
               </Avatar>
             </Button>
           </DropdownMenuTrigger>
@@ -167,7 +176,9 @@ export function Header() {
             <div className="flex items-center justify-start gap-2 p-2">
               <div className="flex flex-col space-y-1 leading-none">
                 <p className="font-medium">{user?.name}</p>
-                <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {user?.email}
+                </p>
               </div>
             </div>
             <DropdownMenuSeparator />
@@ -186,10 +197,7 @@ export function Header() {
               </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="cursor-pointer"
-              onClick={handleLogout}
-            >
+            <DropdownMenuItem className="cursor-pointer" onClick={handleLogout}>
               <LogOut className="mr-2 h-4 w-4" />
               <span>Sair</span>
             </DropdownMenuItem>
