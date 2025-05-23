@@ -3,7 +3,7 @@ import React, { useContext } from "react";
 import { useAuth, AuthUser, UserRole } from "@/contexts/AuthContext";
 
 // Re-export types for backward compatibility
-export { UserRole, AuthUser };
+export type { UserRole, AuthUser };
 
 // Create a compatibility context
 interface SupabaseAuthContextType {

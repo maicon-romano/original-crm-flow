@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useSupabaseAuth } from "@/contexts/SupabaseAuthContext";
 import { 
@@ -21,7 +20,8 @@ import {
   Clock,
   ListTodo
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { db } from "@/lib/firebase";
+import { collection, getDocs, query, where } from "firebase/firestore";
 
 interface DashboardCounts {
   clients: number;
@@ -66,71 +66,85 @@ const Dashboard = () => {
 
       setLoading(true);
       try {
-        // Get client count
-        const { count: clientCount } = await supabase
-          .from("clients")
-          .select("*", { count: 'exact', head: true });
+        // Get client count - using Firebase instead of Supabase
+        const clientsSnapshot = await getDocs(collection(db, "clients"));
+        const clientCount = clientsSnapshot.size;
 
         // Get leads count
-        const { count: leadsCount } = await supabase
-          .from("leads")
-          .select("*", { count: 'exact', head: true })
-          .neq("stage", "won")
-          .neq("stage", "lost");
+        const leadsQuery = query(
+          collection(db, "leads"), 
+          where("stage", "not-in", ["won", "lost"])
+        );
+        const leadsSnapshot = await getDocs(leadsQuery);
+        const leadsCount = leadsSnapshot.size;
 
         // Get active projects count
-        const { count: projectsCount } = await supabase
-          .from("projects")
-          .select("*", { count: 'exact', head: true })
-          .eq("status", "active");
+        const projectsQuery = query(
+          collection(db, "projects"), 
+          where("status", "==", "active")
+        );
+        const projectsSnapshot = await getDocs(projectsQuery);
+        const projectsCount = projectsSnapshot.size;
 
         // Get tasks count
-        const { count: tasksCount } = await supabase
-          .from("tasks")
-          .select("*", { count: 'exact', head: true })
-          .not("status", "eq", "done");
+        const tasksQuery = query(
+          collection(db, "tasks"), 
+          where("status", "!=", "done")
+        );
+        const tasksSnapshot = await getDocs(tasksQuery);
+        const tasksCount = tasksSnapshot.size;
 
         // Get proposals count
-        const { count: proposalsCount } = await supabase
-          .from("proposals")
-          .select("*", { count: 'exact', head: true })
-          .eq("status", "draft");
+        const proposalsQuery = query(
+          collection(db, "proposals"), 
+          where("status", "==", "draft")
+        );
+        const proposalsSnapshot = await getDocs(proposalsQuery);
+        const proposalsCount = proposalsSnapshot.size;
 
         // Get contracts count
-        const { count: contractsCount } = await supabase
-          .from("contracts")
-          .select("*", { count: 'exact', head: true })
-          .eq("status", "draft");
+        const contractsQuery = query(
+          collection(db, "contracts"), 
+          where("status", "==", "draft")
+        );
+        const contractsSnapshot = await getDocs(contractsQuery);
+        const contractsCount = contractsSnapshot.size;
 
         // Get tickets count
-        const { count: ticketsCount } = await supabase
-          .from("tickets")
-          .select("*", { count: 'exact', head: true })
-          .not("status", "in", ["resolved", "closed"]);
+        const ticketsQuery = query(
+          collection(db, "tickets"), 
+          where("status", "not-in", ["resolved", "closed"])
+        );
+        const ticketsSnapshot = await getDocs(ticketsQuery);
+        const ticketsCount = ticketsSnapshot.size;
 
         // Get pending invoices count
-        const { count: pendingInvoicesCount } = await supabase
-          .from("invoices")
-          .select("*", { count: 'exact', head: true })
-          .eq("status", "pending");
+        const pendingInvoicesQuery = query(
+          collection(db, "invoices"), 
+          where("status", "==", "pending")
+        );
+        const pendingInvoicesSnapshot = await getDocs(pendingInvoicesQuery);
+        const pendingInvoicesCount = pendingInvoicesSnapshot.size;
 
         // Get overdue invoices count
-        const { count: overdueInvoicesCount } = await supabase
-          .from("invoices")
-          .select("*", { count: 'exact', head: true })
-          .eq("status", "overdue");
+        const overdueInvoicesQuery = query(
+          collection(db, "invoices"), 
+          where("status", "==", "overdue")
+        );
+        const overdueInvoicesSnapshot = await getDocs(overdueInvoicesQuery);
+        const overdueInvoicesCount = overdueInvoicesSnapshot.size;
 
         // Update state with counts
         setCounts({
-          clients: clientCount || 0,
-          leads: leadsCount || 0,
-          activeProjects: projectsCount || 0,
-          tasks: tasksCount || 0,
-          proposals: proposalsCount || 0,
-          contracts: contractsCount || 0,
-          tickets: ticketsCount || 0,
-          invoicesPending: pendingInvoicesCount || 0,
-          invoicesOverdue: overdueInvoicesCount || 0
+          clients: clientCount,
+          leads: leadsCount,
+          activeProjects: projectsCount,
+          tasks: tasksCount,
+          proposals: proposalsCount,
+          contracts: contractsCount,
+          tickets: ticketsCount,
+          invoicesPending: pendingInvoicesCount,
+          invoicesOverdue: overdueInvoicesCount
         });
 
         // Mock recent activity for now

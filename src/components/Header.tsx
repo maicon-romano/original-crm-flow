@@ -165,7 +165,7 @@ export function Header() {
             <Button variant="ghost" className="relative h-8 w-8 rounded-full">
               <Avatar>
                 <AvatarImage
-                  src={user?.avatar || undefined}
+                  src={user?.avatar_url || undefined}
                   alt={user?.name || ""}
                 />
                 <AvatarFallback>

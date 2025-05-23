@@ -35,7 +35,7 @@ export const useDriveFolders = () => {
       setIsLoading(true);
       console.log(`Listing folders for Drive folder ID: ${folderId}`);
       
-      const { data, error } = await supabase.functions.invoke<DriveFolderResponse>('list-drive-folders', {
+      const { data, error } = await supabase.functions.invoke('list-drive-folders', {
         body: { folderId }
       });
       

@@ -17,7 +17,7 @@ export interface AuthUser {
   role: UserRole;
   position?: string;
   phone?: string;
-  avatar_url?: string;
+  avatar_url?: string; // Changed from avatar to avatar_url
   needs_password_reset?: boolean;
   active?: boolean;
   createdAt?: Date | string;

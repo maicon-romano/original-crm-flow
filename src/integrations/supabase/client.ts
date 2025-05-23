@@ -6,7 +6,8 @@ import {
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
   sendPasswordResetEmail, 
-  signOut 
+  signOut,
+  updatePassword as firebaseUpdatePassword
 } from "firebase/auth";
 
 // Re-export Firebase instances to maintain API compatibility where possible
@@ -55,7 +56,7 @@ export const supabase = {
     updateUser: async ({ password }: { password: string }) => {
       try {
         if (auth.currentUser) {
-          await auth.currentUser.updatePassword(password);
+          await firebaseUpdatePassword(auth.currentUser, password);
           return { error: null };
         }
         throw new Error("No authenticated user");
@@ -70,6 +71,13 @@ export const supabase = {
       });
       
       return { data: { subscription: { unsubscribe } } };
+    },
+    // Add verifyOtp method for UpdatePassword.tsx
+    verifyOtp: async ({token_hash, type}: {token_hash: string, type: string}) => {
+      // This is a simplified mock since Firebase handles OTP verification differently
+      console.log("Mock verifyOtp called with:", token_hash, type);
+      // Just return success for now - in Firebase this would be handled differently
+      return { data: {}, error: null };
     }
   },
   from: (tableName: string) => ({
@@ -108,6 +116,53 @@ export const supabase = {
             return { data: null, error };
           }
         },
+        // Mock implementations for other methods used in Dashboard.tsx
+        order: () => {
+          return {
+            limit: async () => {
+              try {
+                const querySnapshot = await getDocs(collection(db, tableName));
+                const items = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+                return { data: items, error: null, count: items.length };
+              } catch (error) {
+                return { data: null, error };
+              }
+            }
+          };
+        },
+        neq: async (field: string, value: any) => {
+          try {
+            const querySnapshot = await getDocs(collection(db, tableName));
+            const items = querySnapshot.docs
+              .filter(doc => doc.data()[field] !== value)
+              .map(doc => ({ ...doc.data(), id: doc.id }));
+            return { data: items, error: null, count: items.length };
+          } catch (error) {
+            return { data: null, error };
+          }
+        },
+        not: (operator: string, value: any) => {
+          return {
+            limit: async () => {
+              try {
+                const querySnapshot = await getDocs(collection(db, tableName));
+                const items = querySnapshot.docs
+                  .filter(doc => {
+                    if (operator === 'eq') {
+                      return doc.data().status !== value;
+                    } else if (operator === 'in') {
+                      return !value.includes(doc.data().status);
+                    }
+                    return true;
+                  })
+                  .map(doc => ({ ...doc.data(), id: doc.id }));
+                return { data: items, error: null, count: items.length };
+              } catch (error) {
+                return { data: null, error };
+              }
+            }
+          };
+        }
       };
     },
     insert: async (data: any) => {
@@ -147,6 +202,18 @@ export const supabase = {
           // For now, just log and return mock response
           console.log(`Function ${functionName} called with:`, body);
           return { data: { success: true }, error: null };
+        case "list-drive-folders":
+          // Mock response for drive folders
+          return { 
+            data: { 
+              folders: [
+                { id: "folder1", name: "Client Docs", mimeType: "application/vnd.google-apps.folder", webViewLink: "https://drive.google.com" },
+                { id: "folder2", name: "Contracts", mimeType: "application/vnd.google-apps.folder", webViewLink: "https://drive.google.com" }
+              ],
+              count: 2 
+            }, 
+            error: null 
+          };
         default:
           return { 
             data: null, 
