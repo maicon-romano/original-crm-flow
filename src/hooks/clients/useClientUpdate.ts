@@ -1,6 +1,7 @@
 
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { doc, updateDoc, serverTimestamp, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import { toast } from "sonner";
 import { Client } from "@/types/client";
 
@@ -14,27 +15,29 @@ export const useClientUpdate = (
       setIsUpdating(true);
       console.log("Updating client:", id, clientData);
       
-      const { data, error } = await supabase
-        .from('clients')
-        .update({
-          ...clientData,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', id)
-        .select('*')
-        .single();
+      const clientRef = doc(db, 'clientes', id);
       
-      if (error) {
-        console.error("Error updating client:", error);
-        throw new Error(error.message);
+      // Add updated_at timestamp
+      await updateDoc(clientRef, {
+        ...clientData,
+        updated_at: serverTimestamp()
+      });
+      
+      // Get the updated client data
+      const updatedDocSnap = await getDoc(clientRef);
+      
+      if (!updatedDocSnap.exists()) {
+        throw new Error("Cliente não encontrado após atualização");
       }
       
       // Transform the returned client data to ensure correct typing
+      const data = updatedDocSnap.data();
       const typedClient = {
+        id: updatedDocSnap.id,
         ...data,
         person_type: (data.person_type === "fisica" ? "fisica" : "juridica") as "juridica" | "fisica",
-        other_social_media: data.other_social_media ? data.other_social_media as Record<string, string> : undefined
-      };
+        other_social_media: data.other_social_media || undefined
+      } as Client;
       
       // Update the client in the clients array if setClients was provided
       if (setClients) {

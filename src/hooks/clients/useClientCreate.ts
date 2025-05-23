@@ -1,6 +1,7 @@
 
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { collection, addDoc, doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import { toast } from "sonner";
 import { Client, ClientInsert } from "@/types/client";
 
@@ -24,35 +25,29 @@ export const useClientCreate = (
       validateClientData(clientData);
 
       // Ensure required fields are present for database insertion
-      const insertData: ClientInsert = {
+      const insertData = {
         ...clientData,
         // Make sure person_type is always defined with a default value if missing
         person_type: clientData.person_type || "juridica",
         company_name: clientData.person_type === "juridica" ? clientData.company_name || clientData.fantasy_name || "" : clientData.company_name || "",
         contact_name: clientData.contact_name || "",
         email: clientData.email || "",
-        status: clientData.status || "active"
+        status: clientData.status || "active",
+        created_at: serverTimestamp(),
+        updated_at: serverTimestamp()
       };
       
       // First, create the client in the database
-      const { data, error } = await supabase
-        .from('clients')
-        .insert(insertData)
-        .select('*')
-        .single();
+      const docRef = await addDoc(collection(db, "clientes"), insertData);
       
-      if (error) {
-        console.error("Error creating client:", error);
-        toast.error(`Erro ao criar cliente: ${error.message}`);
-        throw new Error(error.message);
-      }
-      
-      // Transform the returned client data to ensure correct typing
+      // Get the new client data with the generated ID
       const typedClient = {
-        ...data,
-        person_type: (data.person_type === "fisica" ? "fisica" : "juridica") as "juridica" | "fisica",
-        other_social_media: data.other_social_media ? data.other_social_media as Record<string, string> : undefined
-      };
+        id: docRef.id,
+        ...insertData,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        person_type: (insertData.person_type === "fisica" ? "fisica" : "juridica") as "juridica" | "fisica"
+      } as Client;
       
       // Add the new client to the clients array if setClients was provided
       if (setClients) {
@@ -134,36 +129,39 @@ export const useClientCreate = (
       if (folderName) {
         console.log(`Attempting to create Drive folders for client: ${folderName}`);
         
-        const { data: driveData, error: driveError } = await supabase.functions.invoke('create-drive-folders', {
-          body: { 
+        // Use fetch to call a REST API endpoint instead of Supabase function
+        const response = await fetch('/api/create-drive-folders', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ 
             client,
             clientName: folderName,
             clientEmail: client.email
-          }
+          })
         });
         
-        if (driveError) {
-          console.error("Error creating Drive folders:", driveError);
-          console.error("Drive error details:", driveError);
-          toast.error(`Erro ao criar pastas do Google Drive: ${driveError.message || "Erro desconhecido"}`);
-          throw new Error(driveError.message || "Erro desconhecido ao criar pastas");
-        } else if (driveData?.folder_id) {
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message || 'Error creating drive folders');
+        }
+        
+        const driveData = await response.json();
+        
+        if (driveData?.folder_id) {
           console.log("Drive folders created successfully:", driveData);
           toast.success("Pastas do Google Drive criadas com sucesso!");
           
           // Update the client with the Drive folder ID
-          await supabase
-            .from('clients')
-            .update({ drive_folder_id: driveData.folder_id })
-            .eq('id', client.id);
+          await setDoc(doc(db, 'clientes', client.id), { 
+            drive_folder_id: driveData.folder_id,
+            updated_at: serverTimestamp()
+          }, { merge: true });
         } else {
-          console.error("No folder ID returned from create-drive-folders function", driveData);
-          toast.error("API retornou dados incompletos ao criar pastas");
           throw new Error("API retornou dados incompletos");
         }
       } else {
-        toast.error("Nome para criação da pasta não fornecido");
-        console.error("Missing folder name for Drive folder creation");
         throw new Error("Nome para criação da pasta não fornecido");
       }
     } catch (driveErr: any) {
@@ -181,8 +179,14 @@ export const useClientCreate = (
         const randomPassword = Math.random().toString(36).slice(-10);
         
         console.log("Sending invitation to:", client.email);
-        const { data: inviteData, error: inviteError } = await supabase.functions.invoke('send-invitation', {
-          body: {
+        
+        // Use fetch to call a REST API endpoint instead of Supabase function
+        const response = await fetch('/api/send-invitation', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
             email: client.email,
             name: client.contact_name,
             company: client.company_name,
@@ -191,20 +195,20 @@ export const useClientCreate = (
             position: client.responsible_position || '',
             phone: client.phone || '',
             send_whatsapp: client.send_whatsapp_invite || false
-          }
+          })
         });
         
-        if (inviteError) {
-          console.error("Error sending invitation:", inviteError);
-          console.error("Invite error details:", inviteError);
-          toast.error(`Erro ao enviar convite: ${inviteError.message || "Erro desconhecido"}`);
-          throw new Error(inviteError.message || "Erro ao enviar convite");
-        } else if (inviteData?.success) {
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message || 'Error sending invitation');
+        }
+        
+        const inviteData = await response.json();
+        
+        if (inviteData?.success) {
           console.log("Invitation sent successfully:", inviteData);
           toast.success("Convite enviado com sucesso!");
         } else {
-          console.error("Unknown error in send-invitation function", inviteData);
-          toast.error("Erro desconhecido ao enviar convite");
           throw new Error("Erro desconhecido ao enviar convite");
         }
       } catch (inviteErr: any) {

@@ -1,6 +1,7 @@
 
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { doc, deleteDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import { Client } from "@/types/client";
 
 export const useClientDelete = (
@@ -13,15 +14,7 @@ export const useClientDelete = (
       setIsDeleting(true);
       console.log(`Attempting to delete client with ID: ${id}`);
       
-      const { error } = await supabase
-        .from('clients')
-        .delete()
-        .eq('id', id);
-      
-      if (error) {
-        console.error("Error deleting client:", error);
-        throw new Error(error.message);
-      }
+      await deleteDoc(doc(db, 'clientes', id));
       
       // Remove the client from the clients array if setClients was provided
       if (setClients) {

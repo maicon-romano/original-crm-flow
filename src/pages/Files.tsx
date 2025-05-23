@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, Plus, Upload, FolderOpen, Loader2, ExternalLink } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { supabase } from "@/integrations/supabase/client";
-import { useSupabaseAuth } from "@/contexts/SupabaseAuthContext";
+import { db } from "@/lib/firebase";
+import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
+import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import { 
@@ -36,7 +37,7 @@ const FilesPage = () => {
   const [selectedClient, setSelectedClient] = useState<string | null>(null);
   const [clientFolders, setClientFolders] = useState<DriveFolder[]>([]);
   const [isLoadingFolders, setIsLoadingFolders] = useState(false);
-  const { user } = useSupabaseAuth();
+  const { user } = useAuth();
   
   const isAdmin = user?.role === "admin";
   const isClient = user?.role === "client";
@@ -45,23 +46,28 @@ const FilesPage = () => {
     try {
       setIsLoading(true);
       
-      let query = supabase.from("clients").select("id, company_name, drive_folder_id");
+      let clientsQuery;
       
       // If user is a client, only show their client record
       if (isClient) {
-        query = query.eq("user_id", user.id);
+        clientsQuery = query(collection(db, "clientes"), where("user_id", "==", user.id));
+      } else {
+        clientsQuery = query(collection(db, "clientes"));
       }
       
-      const { data, error } = await query;
+      const snapshot = await getDocs(clientsQuery);
+      const clientsList = snapshot.docs.map(doc => ({
+        id: doc.id,
+        company_name: doc.data().company_name,
+        drive_folder_id: doc.data().drive_folder_id
+      }));
       
-      if (error) throw error;
-      
-      setClients(data || []);
+      setClients(clientsList || []);
       
       // If we're a client user and have only one client profile, automatically select it
-      if (isClient && data && data.length === 1) {
-        setSelectedClient(data[0].id);
-        fetchClientFolders(data[0].drive_folder_id);
+      if (isClient && clientsList && clientsList.length === 1) {
+        setSelectedClient(clientsList[0].id);
+        fetchClientFolders(clientsList[0].drive_folder_id);
       }
     } catch (error) {
       console.error("Error fetching clients:", error);
@@ -80,12 +86,20 @@ const FilesPage = () => {
     try {
       setIsLoadingFolders(true);
       
-      const { data, error } = await supabase.functions.invoke('list-drive-folders', {
-        body: { folderId }
+      // Use fetch API to make a request to a Firebase function
+      const response = await fetch('/api/list-drive-folders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ folderId })
       });
       
-      if (error) throw error;
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
       
+      const data = await response.json();
       setClientFolders(data?.folders || []);
     } catch (error) {
       console.error("Error fetching folders:", error);

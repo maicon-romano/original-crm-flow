@@ -1,14 +1,15 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { collection, getDocs, query, orderBy } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import { toast } from "sonner";
-import { useSupabaseAuth } from "@/contexts/SupabaseAuthContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Client } from "@/types/client";
 
 export const useClientsList = () => {
   const [clients, setClients] = useState<Client[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const { user } = useSupabaseAuth();
+  const { user } = useAuth();
   const dataFetchedRef = useRef(false);
 
   const fetchClients = useCallback(async () => {
@@ -21,28 +22,21 @@ export const useClientsList = () => {
       setIsLoading(true);
       console.log("Fetching clients...");
       
-      const { data, error } = await supabase
-        .from('clients')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const clientsQuery = query(collection(db, 'clientes'), orderBy('created_at', 'desc'));
+      const snapshot = await getDocs(clientsQuery);
       
-      if (error) {
-        console.error("Error fetching clients:", error);
-        toast.error("Erro ao carregar clientes");
-        return;
-      }
+      const clientsData = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          person_type: (data.person_type === "fisica" ? "fisica" : "juridica") as "juridica" | "fisica",
+          other_social_media: data.other_social_media || undefined
+        } as Client;
+      });
       
-      console.log(`Fetched ${data?.length} clients`);
-      
-      // Transform the data to ensure person_type is properly typed
-      const typedClients = data?.map(client => ({
-        ...client,
-        person_type: (client.person_type === "fisica" ? "fisica" : "juridica") as "juridica" | "fisica",
-        // Ensure other_social_media is properly typed as Record<string, string> or undefined
-        other_social_media: client.other_social_media ? client.other_social_media as Record<string, string> : undefined
-      })) || [];
-      
-      setClients(typedClients);
+      console.log(`Fetched ${clientsData.length} clients`);
+      setClients(clientsData);
       dataFetchedRef.current = true;
     } catch (error) {
       console.error("Exception fetching clients:", error);

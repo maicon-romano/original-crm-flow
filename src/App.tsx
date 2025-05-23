@@ -1,8 +1,10 @@
+
 import { Routes, Route } from "react-router-dom";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
+import { AuthProvider } from "@/contexts/AuthContext";
 
 import { MainLayout } from "@/components/MainLayout";
 import Login from "@/pages/Login";
@@ -64,7 +66,7 @@ const App = () => {
   return (
     <ThemeProvider defaultTheme="light" storageKey="crm-theme">
       <QueryClientProvider client={queryClient}>
-        <SupabaseAuthProvider>
+        <AuthProvider>
           <Toaster />
           <Sonner />
           <Routes>
@@ -81,7 +83,7 @@ const App = () => {
               <Route path="/clients" element={<Clients />} />
               <Route path="/leads" element={<Leads />} />
               <Route path="/usuarios" element={<UsersPage />} />
-              <Route path="/users" element={<UsersPage />} />{" "}
+              <Route path="/users" element={<UsersPage />} /> 
               {/* English alias */}
               <Route path="/projects" element={<ProjectsPage />} />
               <Route path="/tasks" element={<TasksPage />} />
@@ -104,7 +106,7 @@ const App = () => {
             {/* Catch-all route for 404 */}
             <Route path="*" element={<NotFound />} />
           </Routes>
-        </SupabaseAuthProvider>
+        </AuthProvider>
       </QueryClientProvider>
     </ThemeProvider>
   );

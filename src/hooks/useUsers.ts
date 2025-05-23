@@ -1,8 +1,9 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { collection, getDocs, query, orderBy } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import { toast } from "sonner";
-import { useSupabaseAuth } from "@/contexts/SupabaseAuthContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface User {
   id: string;
@@ -13,15 +14,15 @@ interface User {
   position?: string;
   role: string;
   active: boolean;
-  created_at?: string;
-  updated_at?: string;
-  last_login?: string;
+  created_at?: string | number;
+  updated_at?: string | number;
+  last_login?: string | number;
 }
 
 export const useUsers = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const { user } = useSupabaseAuth();
+  const { user } = useAuth();
   const isMounted = useRef(true);
   const dataFetchedRef = useRef(false);
 
@@ -41,37 +42,41 @@ export const useUsers = () => {
     
     try {
       setIsLoading(true);
-      console.log("Fetching users from Supabase...");
+      console.log("Fetching users from Firebase...");
       
       if (showToast) {
         toast.info("Carregando usuários...");
       }
       
-      // Use rpc call to get_all_users to avoid RLS recursion
-      const { data, error } = await supabase.rpc('get_all_users');
+      // Fetch users from the usuarios collection
+      const usersQuery = query(collection(db, 'usuarios'), orderBy('created_at', 'desc'));
+      const snapshot = await getDocs(usersQuery);
       
-      if (error) {
-        console.error("RPC error:", error);
-        
-        // Set an empty array as fallback
-        if (isMounted.current) {
-          setUsers([]);
-        }
-        
-        if (isMounted.current && showToast) {
-          toast.error("Erro ao carregar usuários. Verifique suas permissões.");
-        }
-      } else {
-        console.log("Users data from RPC:", data);
-        
-        if (isMounted.current) {
-          setUsers(data as User[]);
-          dataFetchedRef.current = true;
-        }
-        
-        if (isMounted.current && showToast) {
-          toast.success(`${data?.length || 0} usuários carregados!`);
-        }
+      const usersData = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          // Convert timestamps to ISO strings if they exist
+          created_at: data.created_at ? 
+            (typeof data.created_at === 'object' ? data.created_at.toDate().toISOString() : data.created_at) : 
+            undefined,
+          updated_at: data.updated_at ? 
+            (typeof data.updated_at === 'object' ? data.updated_at.toDate().toISOString() : data.updated_at) : 
+            undefined,
+          last_login: data.last_login ? 
+            (typeof data.last_login === 'object' ? data.last_login.toDate().toISOString() : data.last_login) : 
+            undefined
+        } as User;
+      });
+      
+      if (isMounted.current) {
+        setUsers(usersData);
+        dataFetchedRef.current = true;
+      }
+      
+      if (isMounted.current && showToast) {
+        toast.success(`${usersData.length || 0} usuários carregados!`);
       }
     } catch (error: any) {
       console.error("Error fetching users:", error);

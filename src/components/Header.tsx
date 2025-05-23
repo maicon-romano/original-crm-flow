@@ -1,8 +1,10 @@
+
 import { useState, useEffect } from "react";
 import { Bell, LogOut, Moon, Sun, User, Settings } from "lucide-react";
 import { useTheme } from "@/components/theme/ThemeProvider";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 
 import {
   DropdownMenu,
@@ -23,7 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export function Header() {
-  const { user, logout } = useSupabaseAuth();
+  const { user, logout } = useAuth();
   const { theme, setTheme } = useTheme();
   const [notifications, setNotifications] = useState<any[]>([]);
 
@@ -163,7 +165,7 @@ export function Header() {
             <Button variant="ghost" className="relative h-8 w-8 rounded-full">
               <Avatar>
                 <AvatarImage
-                  src={user?.avatar_url || undefined}
+                  src={user?.avatar || undefined}
                   alt={user?.name || ""}
                 />
                 <AvatarFallback>
